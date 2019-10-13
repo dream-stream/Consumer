@@ -30,6 +30,10 @@ stages:
         buildContext: '.'
         tags: |
           $(tag)
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Pipeline.Workspace)/manifests'
+        artifact: 'manifests'
 - stage: Release
   jobs:  
   - deployment: Release
@@ -39,6 +43,11 @@ stages:
       runOnce:
         deploy:
           steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: 'current'
+              artifact: 'manifests'
+              targetPath: '$(Pipeline.Workspace)/manifests'
           - task: KubernetesManifest@0
             inputs:
               action: 'deploy'
