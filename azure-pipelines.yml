@@ -1,0 +1,48 @@
+trigger:
+- master
+
+resources:
+- repo: self
+
+variables:
+  tag: '$(Build.BuildId)'
+  image: dreamstream/consumer
+  projectPath: ./Consumer
+
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:  
+  - job: Build
+    displayName: Build
+    # pool: Anders
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        containerRegistry: 'dockerHub'
+        repository: | 
+          $(image)
+        command: 'buildAndPush'
+        Dockerfile: '$(projectPath)/Dockerfile'
+        buildContext: '.'
+        tags: |
+          $(tag)
+- stage: Release
+  jobs:  
+  - deployment: Release
+    pool: Anders
+    environment: 'test'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: KubernetesManifest@0
+            inputs:
+              action: 'deploy'
+              namespace: default
+              kubernetesServiceConnection: 'KubeAnders'
+              manifests: manifests/*
+              containers: '$(image):$(tag)'
