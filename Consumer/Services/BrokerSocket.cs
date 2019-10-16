@@ -5,17 +5,13 @@ using System.Threading.Tasks;
 
 namespace Consumer.Services
 {
-    public class SocketService
+    public class BrokerSocket
     {
         private readonly ClientWebSocket _clientWebSocket;
-        private readonly Semaphore _semaphore;
-        private readonly Semaphore _semaphore2;
 
-        public SocketService()
+        public BrokerSocket()
         {
             _clientWebSocket = new ClientWebSocket();
-            _semaphore = new Semaphore(1, 1);
-            _semaphore2 = new Semaphore(1, 1);
         }
 
         public async Task ConnectToBroker(string connectionString)
@@ -25,9 +21,7 @@ namespace Consumer.Services
 
         public async Task SendMessage(byte[] message)
         {
-            _semaphore.WaitOne();
             await _clientWebSocket.SendAsync(new ArraySegment<byte>(message, 0, message.Length), WebSocketMessageType.Binary, false, CancellationToken.None);
-            _semaphore.Release();
         }
 
         public async Task<WebSocketReceiveResult> ReceiveMessage(byte[] buffer)

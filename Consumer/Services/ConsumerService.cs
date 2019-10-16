@@ -7,57 +7,65 @@ namespace Consumer.Services
     public class ConsumerService : IConsumer
     {
         private readonly Guid _consumerId;
-        private int _offset;
-        private int _readSize;
-        private readonly SocketService _socketService;
+        private ulong _offset;
+        private readonly int _readSize;
+        private readonly BrokerSocket _brokerSocket;
         private readonly MessageProcessor _messageProcessor;
 
-        public ConsumerService(SocketService socketService, MessageProcessor messageProcessor)
+        public ConsumerService(BrokerSocket brokerSocket, MessageProcessor messageProcessor)
         {
-            _socketService = socketService ?? throw new ArgumentNullException(nameof(socketService));
+            _brokerSocket = brokerSocket ?? throw new ArgumentNullException(nameof(brokerSocket));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
             _offset = 0;
-            _readSize = 0;
+            _readSize = 1024 * 4;
             _consumerId = Guid.NewGuid();
         }
 
         public async Task Connect(string connectionString)
         {
-            await _socketService.ConnectToBroker(connectionString);
+            await _brokerSocket.ConnectToBroker(connectionString);
         }
 
-        public async Task Subscribe(string topic, Action<MessageContainer> messageHandler)
+        public async Task Subscribe(string topic, string consumerGroup, Action<IMessage> messageHandler)
         {
             var subscriptionRequest = new SubscriptionRequest
             {
-                Topic = topic
+                Topic = topic,
+                ConsumerGroup = consumerGroup,
+                ConsumerId = _consumerId
             };
 
-            await _socketService.SendMessage(_messageProcessor.Serialize<IMessage>(subscriptionRequest));
-            var subResponse = await _messageProcessor.ReceiveMessage<IMessage>(_socketService) as SubscriptionResponse;
+            await _brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(subscriptionRequest));
+            var subResponse = await _messageProcessor.ReceiveMessage<IMessage>(_brokerSocket, _readSize) as SubscriptionResponse;
             Console.WriteLine(subResponse?.TestMessage);
 
-            do
+            //Poll loop
+            while (true)
             {
-                await _socketService.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest()));
-                var message = await _messageProcessor.ReceiveMessage<IMessage>(_socketService) as MessageContainer;
-                messageHandler(message);
-            } while (true);
+#pragma warning disable 4014
+                _brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest
+                {
+                    Topic = "MyTopic",
+                    Partition = 3,
+                    OffSet = _offset,
+                    ReadSize = _readSize
+                }));
+#pragma warning restore 4014
+
+                var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(_brokerSocket, _readSize, messageHandler);
+                _offset += receivedSize;
+                
+            }
         }
 
         public async Task UnSubscribe(Guid consumerId)
         {
-            throw new NotImplementedException();
+            await Task.Run(() => Task.CompletedTask); //TODO Unsubscribe
         }
 
         public async Task CloseConnection()
         {
-            await _socketService.CloseConnection();
-        }
-
-        private void HandleSubscriptionMessage()
-        {
-
+            await _brokerSocket.CloseConnection();
         }
     }
 }

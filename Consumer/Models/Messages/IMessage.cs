@@ -8,6 +8,7 @@ namespace Consumer.Models.Messages
     [Union(3, typeof(Message))]
     [Union(4, typeof(MessageHeader))]
     [Union(5, typeof(MessageRequest))]
+    [Union(6, typeof(NoNewMessage))]
     public interface IMessage
     {
     }

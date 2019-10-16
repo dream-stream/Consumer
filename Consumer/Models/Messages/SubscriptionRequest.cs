@@ -1,4 +1,5 @@
-﻿using MessagePack;
+﻿using System;
+using MessagePack;
 
 namespace Consumer.Models.Messages
 {
@@ -7,5 +8,9 @@ namespace Consumer.Models.Messages
     {
         [Key(1)]
         public string Topic { get; set; }
+        [Key(2)]
+        public string ConsumerGroup { get; set; }
+        [Key(3)]
+        public Guid ConsumerId { get; set; }
     }
 }
