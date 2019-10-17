@@ -1,6 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
+using dotnet_etcd;
+using Mvccpb;
 
 namespace Consumer.Services
 {
@@ -9,52 +14,118 @@ namespace Consumer.Services
         private readonly Guid _consumerId;
         private ulong _offset;
         private readonly int _readSize;
-        private readonly BrokerSocket _brokerSocket;
+        private BrokerSocket[] _brokerSockets;
+        private readonly Dictionary<string, BrokerSocket> _brokerSocketsDict = new Dictionary<string, BrokerSocket>();
         private readonly MessageProcessor _messageProcessor;
+        private EtcdClient _client;
+        private readonly Semaphore _brokerSocketHandlerLock = new Semaphore(1, 1);
+        private string _topic;
 
-        public ConsumerService(BrokerSocket brokerSocket, MessageProcessor messageProcessor)
+        private CancellationTokenSource[] _cTokensForConsumerThreads;
+        private Action<IMessage> _messageHandler;
+
+
+        public ConsumerService(MessageProcessor messageProcessor)
         {
-            _brokerSocket = brokerSocket ?? throw new ArgumentNullException(nameof(brokerSocket));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
             _offset = 0;
             _readSize = 1024 * 4;
             _consumerId = Guid.NewGuid();
         }
 
-        public async Task Connect(string connectionString)
+        public async Task InitSockets(EtcdClient client)
         {
-            await _brokerSocket.ConnectToBroker(connectionString);
+            _client = client;
+            _brokerSockets = await BrokerSocketHandler.UpdateBrokerSockets(client, _brokerSockets);
+            await BrokerSocketHandler.UpdateBrokerSocketsDictionary(client, _brokerSocketsDict, _brokerSockets);
+            client.WatchRange(BrokerSocketHandler.BrokerTablePrefix, async events =>
+            {
+                _brokerSocketHandlerLock.WaitOne();
+                _brokerSockets = await BrokerSocketHandler.BrokerTableChangedHandler(events, _brokerSockets);
+                _brokerSocketHandlerLock.Release();
+            });
+            client.WatchRange(BrokerSocketHandler.TopicTablePrefix, events =>
+            {
+                _brokerSocketHandlerLock.WaitOne();
+                BrokerSocketHandler.TopicTableChangedHandler(events, _brokerSocketsDict, _brokerSockets);
+                _brokerSocketHandlerLock.Release();
+            });
+        }
+        
+        private async Task DoPolling(int partition, CancellationToken cancellationToken)
+        {
+            
+            while (cancellationToken.IsCancellationRequested)
+            {
+                if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
+                {
+#pragma warning disable 4014
+                    brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest
+                    {
+                        Topic = _topic,
+                        Partition = partition,
+                        OffSet = _offset,
+                        ReadSize = _readSize
+                    }));
+#pragma warning restore 4014
+                    var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
+                    _offset += receivedSize;
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
+                }
+            }
         }
 
         public async Task Subscribe(string topic, string consumerGroup, Action<IMessage> messageHandler)
         {
-            var subscriptionRequest = new SubscriptionRequest
-            {
-                Topic = topic,
-                ConsumerGroup = consumerGroup,
-                ConsumerId = _consumerId
-            };
+            _messageHandler = messageHandler;
+            _topic = topic;
+            var partitionCount = await TopicList.GetPartitionCount(_client, topic);
+            _cTokensForConsumerThreads = new CancellationTokenSource[partitionCount];
 
-            await _brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(subscriptionRequest));
-            var subResponse = await _messageProcessor.ReceiveMessage<IMessage>(_brokerSocket, _readSize) as SubscriptionResponse;
-            Console.WriteLine(subResponse?.TestMessage);
+            var consumerGroupTable = new ConsumerGroupTable(_client);
+            await consumerGroupTable.ImHere(topic, consumerGroup, _consumerId, PartitionsChangedHandler);
+        }
 
-            //Poll loop
-            while (true)
+        private void PartitionsChangedHandler(WatchEvent[] watchEvents)
+        {
+            foreach (var watchEvent in watchEvents)
             {
-#pragma warning disable 4014
-                _brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest
+                switch (watchEvent.Type)
                 {
-                    Topic = "MyTopic",
-                    Partition = 3,
-                    OffSet = _offset,
-                    ReadSize = _readSize
-                }));
-#pragma warning restore 4014
+                    case Event.Types.EventType.Put:
+                        var partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
 
-                var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(_brokerSocket, _readSize, messageHandler);
-                _offset += receivedSize;
-                
+                        var partitionIndex = 0;
+                        for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
+                        {
+                            if (i == partitions[partitionIndex])
+                            {
+                                partitionIndex++;
+                                if (_cTokensForConsumerThreads[i] == null) continue;
+                                // create new task and start and add cancellationToken to array
+                                _cTokensForConsumerThreads[i] = new CancellationTokenSource();
+                                var partition = i;
+                                Task.Run(async () => { await DoPolling(partition, _cTokensForConsumerThreads[partition].Token); }, _cTokensForConsumerThreads[i].Token);
+                            }
+                            else
+                            {
+                                _cTokensForConsumerThreads[i].Cancel();
+                                _cTokensForConsumerThreads[i].Dispose();
+                                _cTokensForConsumerThreads[i] = null;
+                            }
+                        }
+
+                        break;
+                    case Event.Types.EventType.Delete:
+                        //Todo maybe I don''t need to handle this one :s
+                        throw new Exception("Lease expired - This should not have been deleted!!!!");
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
             }
         }
 
@@ -65,7 +136,10 @@ namespace Consumer.Services
 
         public async Task CloseConnection()
         {
-            await _brokerSocket.CloseConnection();
+            foreach (var brokerSocket in _brokerSockets)
+            {
+                if (brokerSocket != null) await brokerSocket.CloseConnection();
+            }
         }
     }
 }

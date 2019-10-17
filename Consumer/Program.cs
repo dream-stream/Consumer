@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
 using Consumer.Services;
+using dotnet_etcd;
 
 namespace Consumer
 {
@@ -9,11 +11,16 @@ namespace Consumer
     {
         static async Task Main()
         {
-            IConsumer consumer = new ConsumerService(new BrokerSocket(), new MessageProcessor());
+            IConsumer consumer = new ConsumerService(new MessageProcessor());
+            
+            var client = EnvironmentVariables.IsDev ? new EtcdClient("http://localhost") : new EtcdClient("http://etcd");
+            await consumer.InitSockets(client);
+            await consumer.Subscribe("Topic2", "Nicklas-Is-A-Noob", MessageHandler);
 
-            await consumer.Connect("ws://localhost:5000/ws");
-
-            await consumer.Subscribe("Some Topic", "Anders-Is-A-Noob", MessageHandler);
+            while (true)
+            {
+                await Task.Delay(10000);
+            }
         }
 
         private static void MessageHandler(IMessage container)
