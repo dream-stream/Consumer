@@ -45,7 +45,7 @@ namespace Consumer.Services
                 Lease = leaseGrantResponse.ID,
                 Key = ByteString.CopyFromUtf8(key),
             });
-
+            // TODO Change back to 5
             _timer = new Timer(LeaseKeepAlive, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
         }
 

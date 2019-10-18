@@ -9,6 +9,7 @@ namespace Consumer.Services
     {
         private readonly ClientWebSocket _clientWebSocket;
         private readonly Semaphore _lock;
+        private readonly Semaphore _lock2;
         public string ConnectedTo { get; set; }
 
 
@@ -16,6 +17,7 @@ namespace Consumer.Services
         {
             _clientWebSocket = new ClientWebSocket();
             _lock = new Semaphore(1, 1);
+            _lock2 = new Semaphore(1, 1);
         }
 
         public async Task ConnectToBroker(string connectionString)
@@ -33,7 +35,10 @@ namespace Consumer.Services
 
         public async Task<WebSocketReceiveResult> ReceiveMessage(byte[] buffer)
         {
-            return await _clientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            _lock2.WaitOne();
+            var webSocketReceiveResult = await _clientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            _lock2.Release();
+            return webSocketReceiveResult;
         }
 
         public async Task CloseConnection()

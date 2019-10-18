@@ -31,6 +31,8 @@ namespace Consumer.Services
             _offset = 0;
             _readSize = 1024 * 4;
             _consumerId = Guid.NewGuid();
+
+            Console.WriteLine($"Id - {_consumerId}");
         }
 
         public async Task InitSockets(EtcdClient client)
@@ -55,7 +57,7 @@ namespace Consumer.Services
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
         {
             
-            while (cancellationToken.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
                 {
@@ -96,22 +98,25 @@ namespace Consumer.Services
                 switch (watchEvent.Type)
                 {
                     case Event.Types.EventType.Put:
-                        var partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
+                        int[] partitions = null;
+                        if (!string.IsNullOrEmpty(watchEvent.Value))
+                            partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
 
                         var partitionIndex = 0;
                         for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
                         {
-                            if (i == partitions[partitionIndex])
+                            if (partitions != null && i == partitions[partitionIndex])
                             {
-                                partitionIndex++;
-                                if (_cTokensForConsumerThreads[i] == null) continue;
+                                if(partitionIndex < partitions.Length - 1) partitionIndex++;
+                                if (_cTokensForConsumerThreads[i] != null) continue;
                                 // create new task and start and add cancellationToken to array
                                 _cTokensForConsumerThreads[i] = new CancellationTokenSource();
                                 var partition = i;
                                 Task.Run(async () => { await DoPolling(partition, _cTokensForConsumerThreads[partition].Token); }, _cTokensForConsumerThreads[i].Token);
                             }
-                            else
+                            else if (_cTokensForConsumerThreads[i] != null)
                             {
+                                Console.WriteLine($"Killing task {i}");
                                 _cTokensForConsumerThreads[i].Cancel();
                                 _cTokensForConsumerThreads[i].Dispose();
                                 _cTokensForConsumerThreads[i] = null;
