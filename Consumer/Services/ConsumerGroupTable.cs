@@ -25,8 +25,8 @@ namespace Consumer.Services
         public async Task ImHere(string topic, string consumerGroup, Guid id, Action<WatchEvent[]> partitionsChangedHandler)
         {
             _key = $"{Prefix}{topic}/{consumerGroup}/{id}";
-            await ImHere(_key);
             _client.Watch(_key, partitionsChangedHandler);
+            await ImHere(_key);
         }
 
 

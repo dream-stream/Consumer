@@ -20,7 +20,6 @@ namespace Consumer
             var client = EnvironmentVariables.IsDev ? new EtcdClient("http://localhost") : new EtcdClient("http://etcd");
             await consumer.InitSockets(client);
             // Added delay to give it time to watch before creating.
-            await Task.Delay(1000);
             await consumer.Subscribe(topic, consumerGroup, MessageHandler);
 
             while (true)
