@@ -36,7 +36,8 @@ namespace Consumer
                     msg.Messages.ForEach(message => message.Print());
                     break;
                 case NoNewMessage _:
-                    Console.WriteLine($"No new messages");
+                    // TODO Maybe comment in again or make some kind of delay, but this is SPAMMING
+                    //Console.WriteLine($"No new messages");
                     break;
                 default:
                     throw new Exception("Unknown message type");

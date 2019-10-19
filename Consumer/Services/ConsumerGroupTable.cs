@@ -29,8 +29,6 @@ namespace Consumer.Services
             await ImHere(_key);
         }
 
-
-
         private async Task ImHere(string key)
         {
             var leaseGrantRequest = new LeaseGrantRequest
