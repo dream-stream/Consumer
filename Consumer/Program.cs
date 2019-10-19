@@ -33,6 +33,7 @@ namespace Consumer
             switch (container)
             {
                 case MessageContainer msg:
+                    Console.WriteLine($"Topic: {msg.Header.Topic}, Partition: {msg.Header.Partition}");
                     msg.Messages.ForEach(message => message.Print());
                     break;
                 case NoNewMessage _:
