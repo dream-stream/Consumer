@@ -56,7 +56,7 @@ namespace Consumer.Services
         
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
         {
-            
+            Console.WriteLine($"Started Polling of partition {partition}");
             while (!cancellationToken.IsCancellationRequested)
             {
                 if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
