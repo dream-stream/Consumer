@@ -33,8 +33,8 @@ namespace Consumer
             switch (container)
             {
                 case MessageContainer msg:
-                    Console.WriteLine($"Topic: {msg.Header.Topic}, Partition: {msg.Header.Partition}");
-                    msg.Messages.ForEach(message => message.Print());
+                    Console.WriteLine($"Topic: {msg.Header.Topic}, Partition: {msg.Header.Partition}\n Received messages but not printing");
+                    //msg.Messages.ForEach(message => message.Print());
                     break;
                 case NoNewMessage _:
                     // TODO Maybe comment in again or make some kind of delay, but this is SPAMMING
