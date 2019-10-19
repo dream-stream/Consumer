@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
 using Consumer.Services;
@@ -11,11 +10,16 @@ namespace Consumer
     {
         static async Task Main()
         {
+            const string topic = "Topic2";
+            const string consumerGroup = "Nicklas-Is-A-Noob";
+
+            Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
+
             IConsumer consumer = new ConsumerService(new MessageProcessor());
             
             var client = EnvironmentVariables.IsDev ? new EtcdClient("http://localhost") : new EtcdClient("http://etcd");
             await consumer.InitSockets(client);
-            await consumer.Subscribe("Topic2", "Nicklas-Is-A-Noob", MessageHandler);
+            await consumer.Subscribe(topic, consumerGroup, MessageHandler);
 
             while (true)
             {
