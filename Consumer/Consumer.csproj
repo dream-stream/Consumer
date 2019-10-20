@@ -10,6 +10,7 @@
     <PackageReference Include="MessagePack" Version="1.7.3.7" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.9.5" />
     <PackageReference Include="dotnet-etcd" Version="3.0.0.1-beta" />
+    <PackageReference Include="prometheus-net.AspNetCore" Version="3.2.1" />
   </ItemGroup>
 
 </Project>

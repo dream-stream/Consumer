@@ -3,13 +3,23 @@ using System.Threading.Tasks;
 using Consumer.Models.Messages;
 using Consumer.Services;
 using dotnet_etcd;
+using Prometheus;
 
 namespace Consumer
 {
     internal class Program
     {
+        private static readonly Counter BatchedMessagesConsumed = Metrics.CreateCounter("batched_messages_consumed", "Number of batched messages consumed.");
+        private static readonly Counter MessagesConsumed = Metrics.CreateCounter("messages_consumed", "Number of messages consumed.");
+
         static async Task Main()
         {
+            if(!EnvironmentVariables.IsDev)
+            {
+                var metricServer = new MetricServer(80);
+                metricServer.Start();
+            }
+
             const string topic = "Topic2";
             const string consumerGroup = "Nicklas-Is-A-Noob";
 
@@ -34,6 +44,8 @@ namespace Consumer
             {
                 case MessageContainer msg:
                     Console.WriteLine($"Topic: {msg.Header.Topic}, Partition: {msg.Header.Partition}\n Received messages but not printing");
+                    BatchedMessagesConsumed.Inc();
+                    msg.Messages.ForEach(message => MessagesConsumed.Inc());
                     //msg.Messages.ForEach(message => message.Print());
                     break;
                 case NoNewMessage _:
