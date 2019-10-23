@@ -55,3 +55,17 @@ stages:
               kubernetesServiceConnection: 'KubeAnders'
               manifests: manifests/*
               containers: '$(image):$(tag)'
+  - deployment: Release
+    pool: Nicklas
+    environment: 'test'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: KubernetesManifest@0
+            inputs:
+              action: 'deploy'
+              namespace: default
+              kubernetesServiceConnection: 'KubeNicklas'
+              manifests: manifests/*
+              containers: '$(image):$(tag)'
