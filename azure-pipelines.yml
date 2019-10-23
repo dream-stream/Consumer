@@ -62,6 +62,11 @@ stages:
       runOnce:
         deploy:
           steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: 'current'
+              artifact: 'manifests'
+              targetPath: 'manifests'
           - task: KubernetesManifest@0
             inputs:
               action: 'deploy'
