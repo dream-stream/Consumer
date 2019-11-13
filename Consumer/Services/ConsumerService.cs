@@ -12,7 +12,7 @@ namespace Consumer.Services
     public class ConsumerService : IConsumer
     {
         private readonly Guid _consumerId;
-        private ulong _offset;
+        private ulong[] _offset;
         private readonly int _readSize;
         private BrokerSocket[] _brokerSockets;
         private readonly Dictionary<string, BrokerSocket> _brokerSocketsDict = new Dictionary<string, BrokerSocket>();
@@ -22,13 +22,12 @@ namespace Consumer.Services
         private string _topic;
 
         private CancellationTokenSource[] _cTokensForConsumerThreads;
-        private Action<IMessage> _messageHandler;
+        private Action<MessageRequestResponse> _messageHandler;
 
 
         public ConsumerService(MessageProcessor messageProcessor)
         {
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
-            _offset = 0;
             _readSize = 1024 * 4;
             _consumerId = Guid.NewGuid();
 
@@ -66,12 +65,12 @@ namespace Consumer.Services
                     {
                         Topic = _topic,
                         Partition = partition,
-                        OffSet = _offset,
+                        OffSet = _offset[partition],
                         ReadSize = _readSize
                     }));
 #pragma warning restore 4014
                     var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
-                    _offset += receivedSize;
+                    _offset[partition] += receivedSize;
                 }
                 else
                 {
@@ -80,7 +79,7 @@ namespace Consumer.Services
             }
         }
 
-        public async Task Subscribe(string topic, string consumerGroup, Action<IMessage> messageHandler)
+        public async Task Subscribe(string topic, string consumerGroup, Action<MessageRequestResponse> messageHandler)
         {
             _messageHandler = messageHandler;
             _topic = topic;
@@ -103,6 +102,10 @@ namespace Consumer.Services
                             partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
 
                         var partitionIndex = 0;
+                        if (partitions != null)
+                        {
+                            _offset = new ulong[partitions.Length];
+                        }
                         for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
                         {
                             if (partitions != null && i == partitions[partitionIndex])
@@ -127,7 +130,6 @@ namespace Consumer.Services
                     case Event.Types.EventType.Delete:
                         //Todo maybe I don''t need to handle this one :s
                         throw new Exception("Lease expired - This should not have been deleted!!!!");
-                        break;
                     default:
                         throw new ArgumentOutOfRangeException();
                 }
