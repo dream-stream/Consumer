@@ -22,7 +22,7 @@ namespace Consumer
             }
 
             const string topic = "Topic3";
-            const string consumerGroup = "Nicklas-Is-A-Noob";
+            const string consumerGroup = "Anders-Is-A-Noob";
 
             Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
 

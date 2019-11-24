@@ -12,7 +12,8 @@ namespace Consumer.Services
     public class ConsumerService : IConsumer
     {
         private readonly Guid _consumerId;
-        private ulong[] _offset;
+        private string _consumerGroup;
+        private long[] _offset;
         private readonly int _readSize;
         private BrokerSocket[] _brokerSockets;
         private readonly Dictionary<string, BrokerSocket> _brokerSocketsDict = new Dictionary<string, BrokerSocket>();
@@ -28,7 +29,7 @@ namespace Consumer.Services
         public ConsumerService(MessageProcessor messageProcessor)
         {
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
-            _readSize = 1024 * 4;
+            _readSize = 1024 * 6;
             _consumerId = Guid.NewGuid();
 
             Console.WriteLine($"Id - {_consumerId}");
@@ -56,6 +57,9 @@ namespace Consumer.Services
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
         {
             Console.WriteLine($"Started Polling of partition {partition}");
+
+            await GetOffset(partition);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
@@ -66,7 +70,8 @@ namespace Consumer.Services
                         Topic = _topic,
                         Partition = partition,
                         OffSet = _offset[partition],
-                        ReadSize = _readSize
+                        ReadSize = _readSize,
+                        ConsumerGroup = _consumerGroup
                     }));
 #pragma warning restore 4014
                     var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
@@ -79,15 +84,35 @@ namespace Consumer.Services
             }
         }
 
+        private async Task GetOffset(int partition)
+        {
+            if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
+            {
+                await brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new OffsetRequest
+                {
+                    ConsumerGroup = _consumerGroup,
+                    Topic = _topic,
+                    Partition = partition
+                }));
+                var response = (OffsetResponse)await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket);
+                _offset[partition] = response.Offset;
+            }
+            else
+            {
+                Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
+            }
+        }
+
         public async Task Subscribe(string topic, string consumerGroup, Action<MessageRequestResponse> messageHandler)
         {
             _messageHandler = messageHandler;
             _topic = topic;
+            _consumerGroup = consumerGroup;
             var partitionCount = await TopicList.GetPartitionCount(_client, topic);
             _cTokensForConsumerThreads = new CancellationTokenSource[partitionCount];
 
             var consumerGroupTable = new ConsumerGroupTable(_client);
-            await consumerGroupTable.ImHere(topic, consumerGroup, _consumerId, PartitionsChangedHandler);
+            await consumerGroupTable.ImHere(topic, _consumerGroup, _consumerId, PartitionsChangedHandler);
         }
 
         private void PartitionsChangedHandler(WatchEvent[] watchEvents)
@@ -104,7 +129,7 @@ namespace Consumer.Services
                         var partitionIndex = 0;
                         if (partitions != null)
                         {
-                            _offset = new ulong[partitions.Length];
+                            _offset = new long[partitions.Length];
                         }
                         for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
                         {

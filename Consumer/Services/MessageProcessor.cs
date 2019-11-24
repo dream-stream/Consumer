@@ -19,9 +19,9 @@ namespace Consumer.Services
             return LZ4MessagePackSerializer.Deserialize<T>(message);
         }
 
-        public async Task<IMessage> ReceiveMessage<T>(BrokerSocket brokerSocket, int readSize) where T : IMessage
+        public async Task<IMessage> ReceiveMessage<T>(BrokerSocket brokerSocket) where T : IMessage
         {
-            var buffer = new byte[readSize];
+            var buffer = new byte[1024 * 6];
             var result = await brokerSocket.ReceiveMessage(buffer);
 
             var message = Deserialize<T>(buffer.Take(result.Count).ToArray());
@@ -31,7 +31,7 @@ namespace Consumer.Services
 
         private ulong testCounter = 0;
 
-        public async Task<ulong> ReceiveMessage<T>(BrokerSocket brokerSocket, int readSize, Action<MessageRequestResponse> handler) where T : IMessage
+        public async Task<long> ReceiveMessage<T>(BrokerSocket brokerSocket, int readSize, Action<MessageRequestResponse> handler) where T : IMessage
         {
             var buffer = new byte[readSize];
             var result = await brokerSocket.ReceiveMessage(buffer);
@@ -44,7 +44,7 @@ namespace Consumer.Services
                     Task.Run(() => handler(msg));
 #pragma warning restore 4014
                     
-                    return Convert.ToUInt64(result.Count);
+                    return Convert.ToInt64(result.Count);
                 case NoNewMessage _:
                     if(testCounter % 1000 == 0)
                         Console.WriteLine("No new message");
