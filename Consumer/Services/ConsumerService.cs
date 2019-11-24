@@ -12,7 +12,8 @@ namespace Consumer.Services
     public class ConsumerService : IConsumer
     {
         private readonly Guid _consumerId;
-        private ulong _offset;
+        private string _consumerGroup;
+        private long[] _offset;
         private readonly int _readSize;
         private BrokerSocket[] _brokerSockets;
         private readonly Dictionary<string, BrokerSocket> _brokerSocketsDict = new Dictionary<string, BrokerSocket>();
@@ -22,14 +23,13 @@ namespace Consumer.Services
         private string _topic;
 
         private CancellationTokenSource[] _cTokensForConsumerThreads;
-        private Action<IMessage> _messageHandler;
+        private Action<MessageRequestResponse> _messageHandler;
 
 
         public ConsumerService(MessageProcessor messageProcessor)
         {
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
-            _offset = 0;
-            _readSize = 1024 * 4;
+            _readSize = 1024 * 6;
             _consumerId = Guid.NewGuid();
 
             Console.WriteLine($"Id - {_consumerId}");
@@ -57,6 +57,9 @@ namespace Consumer.Services
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
         {
             Console.WriteLine($"Started Polling of partition {partition}");
+
+            await GetOffset(partition);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
@@ -66,12 +69,13 @@ namespace Consumer.Services
                     {
                         Topic = _topic,
                         Partition = partition,
-                        OffSet = _offset,
-                        ReadSize = _readSize
+                        OffSet = _offset[partition],
+                        ReadSize = _readSize,
+                        ConsumerGroup = _consumerGroup
                     }));
 #pragma warning restore 4014
                     var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
-                    _offset += receivedSize;
+                    _offset[partition] += receivedSize;
                 }
                 else
                 {
@@ -80,15 +84,35 @@ namespace Consumer.Services
             }
         }
 
-        public async Task Subscribe(string topic, string consumerGroup, Action<IMessage> messageHandler)
+        private async Task GetOffset(int partition)
+        {
+            if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
+            {
+                await brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new OffsetRequest
+                {
+                    ConsumerGroup = _consumerGroup,
+                    Topic = _topic,
+                    Partition = partition
+                }));
+                var response = (OffsetResponse)await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket);
+                _offset[partition] = response.Offset;
+            }
+            else
+            {
+                Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
+            }
+        }
+
+        public async Task Subscribe(string topic, string consumerGroup, Action<MessageRequestResponse> messageHandler)
         {
             _messageHandler = messageHandler;
             _topic = topic;
+            _consumerGroup = consumerGroup;
             var partitionCount = await TopicList.GetPartitionCount(_client, topic);
             _cTokensForConsumerThreads = new CancellationTokenSource[partitionCount];
 
             var consumerGroupTable = new ConsumerGroupTable(_client);
-            await consumerGroupTable.ImHere(topic, consumerGroup, _consumerId, PartitionsChangedHandler);
+            await consumerGroupTable.ImHere(topic, _consumerGroup, _consumerId, PartitionsChangedHandler);
         }
 
         private void PartitionsChangedHandler(WatchEvent[] watchEvents)
@@ -103,6 +127,10 @@ namespace Consumer.Services
                             partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
 
                         var partitionIndex = 0;
+                        if (partitions != null)
+                        {
+                            _offset = new long[partitions.Length];
+                        }
                         for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
                         {
                             if (partitions != null && i == partitions[partitionIndex])
@@ -127,7 +155,6 @@ namespace Consumer.Services
                     case Event.Types.EventType.Delete:
                         //Todo maybe I don''t need to handle this one :s
                         throw new Exception("Lease expired - This should not have been deleted!!!!");
-                        break;
                     default:
                         throw new ArgumentOutOfRangeException();
                 }

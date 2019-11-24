@@ -10,8 +10,10 @@ namespace Consumer.Models.Messages
         [Key(2)]
         public int Partition { get; set; }
         [Key(3)] 
-        public ulong OffSet { get; set; }
+        public long OffSet { get; set; }
         [Key(4)]
         public int ReadSize { get; set; }
+        [Key(5)] 
+        public string ConsumerGroup { get; set; }
     }
 }

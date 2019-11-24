@@ -21,8 +21,8 @@ namespace Consumer
                 metricServer.Start();
             }
 
-            const string topic = "Topic2";
-            const string consumerGroup = "Nicklas-Is-A-Noob";
+            const string topic = "Topic3";
+            const string consumerGroup = "Anders-Is-A-Noob";
 
             Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
 
@@ -35,25 +35,14 @@ namespace Consumer
             while (true) await Task.Delay(10000);
         }
 
-        private static void MessageHandler(IMessage container)
+        private static void MessageHandler(MessageRequestResponse msg)
         {
-            switch (container)
-            {
-                case MessageContainer msg:
-                    Console.WriteLine($"Topic: {msg.Header.Topic}, Partition: {msg.Header.Partition}\n Received messages but not printing");
-                    BatchedMessagesConsumed.Inc();
-                    msg.Messages.ForEach(message => MessagesConsumed.Inc());
-                    //msg.Messages.ForEach(message => message.Print());
-                    break;
-                case NoNewMessage _:
-                    // TODO Maybe comment in again or make some kind of delay, but this is SPAMMING
-                    NoNewMessages.Inc();
-                    //Console.WriteLine($"No new messages");
-                    break;
-                default:
-                    throw new Exception("Unknown message type");
-            }
-            //container.Messages.ForEach(message => message.Print());
+            BatchedMessagesConsumed.Inc();
+            MessagesConsumed.Inc(msg.Messages.Count);
+
+            if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
+
+            //msg.Messages.ForEach(message => message.Print());
         }
     }
 }
