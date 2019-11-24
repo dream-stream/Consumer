@@ -76,6 +76,9 @@ namespace Consumer.Services
 #pragma warning restore 4014
                     var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
                     _offset[partition] += receivedSize;
+
+                    if (receivedSize == 0)
+                        await Task.Delay(500, cancellationToken);
                 }
                 else
                 {
