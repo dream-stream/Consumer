@@ -22,6 +22,7 @@ namespace Consumer.Services
 
         public async Task ConnectToBroker(string connectionString)
         {
+            Console.WriteLine($"Connecting to broker {connectionString}");
             await _clientWebSocket.ConnectAsync(new Uri(connectionString), CancellationToken.None);
             ConnectedTo = connectionString;
         }
