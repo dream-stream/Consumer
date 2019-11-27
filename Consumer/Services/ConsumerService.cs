@@ -53,7 +53,7 @@ namespace Consumer.Services
                 _brokerSocketHandlerLock.Release();
             });
         }
-        
+
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
         {
             Console.WriteLine($"Started Polling of partition {partition}");

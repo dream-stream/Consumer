@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
 using MessagePack;
@@ -44,11 +43,10 @@ namespace Consumer.Services
                     Task.Run(() => handler(msg));
 #pragma warning restore 4014
                     
-                    return Convert.ToInt64(result.Count);
+                    return msg.Offset;
                 case NoNewMessage _:
-                    if(testCounter % 1000 == 0)
-                        Console.WriteLine("No new message");
-                    testCounter++;
+                    if(testCounter++ % 1000 == 0)
+                        Console.WriteLine("No new message * 1000");
                     return 0;
                 default:
                     throw new Exception("Unknown message type");

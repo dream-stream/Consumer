@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
 using Consumer.Services;
 using dotnet_etcd;
+using MessagePack;
 using Prometheus;
 
 namespace Consumer
@@ -12,6 +15,8 @@ namespace Consumer
         private static readonly Counter BatchedMessagesConsumed = Metrics.CreateCounter("batched_messages_consumed", "Number of batched messages consumed.");
         private static readonly Counter MessagesConsumed = Metrics.CreateCounter("messages_consumed", "Number of messages consumed.");
         private static readonly Counter NoNewMessages = Metrics.CreateCounter("no_new_messages", "Number of times the message \"No new messages\" has been received.");
+        private static readonly Gauge MessagesConsumedPerSecond = Metrics.CreateGauge("messages_consumed_per_second", 
+            "Messages consumed for the current second.");
 
         static async Task Main()
         {
@@ -23,6 +28,12 @@ namespace Consumer
 
             const string topic = "Topic3";
             const string consumerGroup = "Anders-Is-A-Noob";
+            var timer = new Timer(_ =>
+            {
+                Console.WriteLine($"Messages consumed: {MessagesConsumedPerSecond.Value}");
+                MessagesConsumedPerSecond.Set(0);
+
+            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
 
             Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
 
@@ -37,10 +48,19 @@ namespace Consumer
 
         private static void MessageHandler(MessageRequestResponse msg)
         {
-            BatchedMessagesConsumed.Inc();
-            MessagesConsumed.Inc(msg.Messages.Count);
+            BatchedMessagesConsumed.Inc(msg.Messages.Count);
 
-            if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
+            foreach (var serializedMessages in msg.Messages)
+            {
+                if (!(LZ4MessagePackSerializer.Deserialize<IMessage>(serializedMessages) is MessageContainer messages)) continue;
+                
+                MessagesConsumed.Inc(messages.Messages.Count);
+                MessagesConsumedPerSecond.Inc(messages.Messages.Count);
+            }
+
+            //if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
+
+            
 
             //msg.Messages.ForEach(message => message.Print());
         }
