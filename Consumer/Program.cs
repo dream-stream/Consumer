@@ -28,12 +28,12 @@ namespace Consumer
 
             const string topic = "Topic3";
             const string consumerGroup = "Anders-Is-A-Noob";
-            var timer = new Timer(_ =>
-            {
-                Console.WriteLine($"Messages consumed: {MessagesConsumedPerSecond.Value}");
-                MessagesConsumedPerSecond.Set(0);
+            //var timer = new Timer(_ =>
+            //{
+            //    Console.WriteLine($"Messages consumed: {MessagesConsumedPerSecond.Value}");
+            //    MessagesConsumedPerSecond.Set(0);
 
-            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+            //}, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
 
             Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
 
@@ -43,7 +43,12 @@ namespace Consumer
             await consumer.InitSockets(client);
             await consumer.Subscribe(topic, consumerGroup, MessageHandler);
 
-            while (true) await Task.Delay(10000);
+            while (true)
+            {
+                Console.WriteLine($"Messages consumed: {MessagesConsumedPerSecond.Value}");
+                MessagesConsumedPerSecond.Set(0);
+                await Task.Delay(10000);
+            }
         }
 
         private static void MessageHandler(MessageRequestResponse msg)
@@ -58,7 +63,7 @@ namespace Consumer
                 MessagesConsumedPerSecond.Inc(messages.Messages.Count);
             }
 
-            //if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
+            if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
 
             
 
