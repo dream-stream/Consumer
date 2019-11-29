@@ -63,7 +63,7 @@ namespace Consumer
                 MessagesConsumedPerSecond.Inc(messages.Messages.Count);
             }
 
-            if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
+            //if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
 
             
 
