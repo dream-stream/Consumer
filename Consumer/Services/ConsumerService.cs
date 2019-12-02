@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,23 +13,23 @@ namespace Consumer.Services
     {
         private readonly Guid _consumerId;
         private string _consumerGroup;
-        private long[] _offset;
+        private static (SemaphoreSlim _lock, long _offset)[] _offsetHandler;
         private readonly int _readSize;
         private BrokerSocket[] _brokerSockets;
-        private readonly Dictionary<string, BrokerSocket> _brokerSocketsDict = new Dictionary<string, BrokerSocket>();
+        private readonly ConcurrentDictionary<string, BrokerSocket> _brokerSocketsDict = new ConcurrentDictionary<string, BrokerSocket>();
         private readonly MessageProcessor _messageProcessor;
         private EtcdClient _client;
         private readonly Semaphore _brokerSocketHandlerLock = new Semaphore(1, 1);
+        private readonly SemaphoreSlim _repartitionLock = new SemaphoreSlim(1, 1);
         private string _topic;
 
         private CancellationTokenSource[] _cTokensForConsumerThreads;
         private Action<MessageRequestResponse> _messageHandler;
 
-
         public ConsumerService(MessageProcessor messageProcessor)
         {
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
-            _readSize = 1024 * 6;
+            _readSize = 6000;
             _consumerId = Guid.NewGuid();
 
             Console.WriteLine($"Id - {_consumerId}");
@@ -56,53 +56,54 @@ namespace Consumer.Services
 
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
         {
-            Console.WriteLine($"Started Polling of partition {partition}");
-
-            await GetOffset(partition);
-
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
+                Console.WriteLine($"Started Polling of partition {partition}");
+
+                while (!cancellationToken.IsCancellationRequested)
                 {
-#pragma warning disable 4014
-                    brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest
+                    if (_repartitionLock.CurrentCount == 0)
                     {
-                        Topic = _topic,
-                        Partition = partition,
-                        OffSet = _offset[partition],
-                        ReadSize = _readSize,
-                        ConsumerGroup = _consumerGroup
-                    }));
+                        await _repartitionLock.WaitAsync(cancellationToken);
+                        _repartitionLock.Release();
+                    } 
+                    //await _offsetHandler[partition]._lock.WaitAsync(cancellationToken);
+                    var offset = _offsetHandler[partition]._offset;
+
+                    if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
+                    {
+#pragma warning disable 4014
+                        brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest
+                        {
+                            Topic = _topic,
+                            Partition = partition,
+                            OffSet = offset,
+                            ReadSize = _readSize,
+                            ConsumerGroup = _consumerGroup
+                        }));
 #pragma warning restore 4014
-                    var receivedSize = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
-                    _offset[partition] += receivedSize;
 
-                    if (receivedSize == 0)
-                        await Task.Delay(500, cancellationToken);
-                }
-                else
-                {
-                    Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
+                        var (header, receivedSize) = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
+
+
+                        if (_offsetHandler[header.Partition]._offset == -1)
+                            _offsetHandler[header.Partition]._offset = 0;
+                        _offsetHandler[header.Partition]._offset += receivedSize;
+                        //_offsetHandler[header.Partition]._lock.Release();
+
+                        if (receivedSize == 0)
+                            await Task.Delay(500, cancellationToken);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
+                    }
                 }
             }
-        }
-
-        private async Task GetOffset(int partition)
-        {
-            if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
+            catch (Exception e)
             {
-                await brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new OffsetRequest
-                {
-                    ConsumerGroup = _consumerGroup,
-                    Topic = _topic,
-                    Partition = partition
-                }));
-                var response = (OffsetResponse)await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket);
-                _offset[partition] = response.Offset;
-            }
-            else
-            {
-                Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
+                Console.WriteLine(e);
+                throw;
             }
         }
 
@@ -132,7 +133,33 @@ namespace Consumer.Services
                         var partitionIndex = 0;
                         if (partitions != null)
                         {
-                            _offset = new long[partitions.Length];
+                            if (_offsetHandler == null)
+                            {
+                                _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
+                                for (var i = 0; i < _offsetHandler.Length; i++)
+                                {
+                                    _offsetHandler[i]._lock = new SemaphoreSlim(1,1);
+                                    _offsetHandler[i]._offset = -1;
+                                }
+                            }
+                            else
+                            {
+                                _repartitionLock.Wait();
+                                // resize array and put data still needed.
+                                var oldArray = new (SemaphoreSlim _lock, long _offset)[_offsetHandler.Length];
+                                _offsetHandler.CopyTo(oldArray, 0);
+                                _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
+                                for (var i = 0; i < _offsetHandler.Length; i++)
+                                {
+                                    _offsetHandler[i]._lock = new SemaphoreSlim(1, 1);
+                                    _offsetHandler[i]._offset = -1;
+                                }
+
+                                for (var i = 0; i < _offsetHandler.Length && i < oldArray.Length; i++) 
+                                    _offsetHandler[i] = oldArray[i];
+
+                                _repartitionLock.Release();
+                            }
                         }
                         for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
                         {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,7 +22,7 @@ namespace Consumer.Services
             return brokerSockets;
         }
 
-        public static async Task UpdateBrokerSocketsDictionary(EtcdClient client, Dictionary<string, BrokerSocket> brokerSocketsDict, BrokerSocket[] brokerSockets)
+        public static async Task UpdateBrokerSocketsDictionary(EtcdClient client, ConcurrentDictionary<string, BrokerSocket> brokerSocketsDict, BrokerSocket[] brokerSockets)
         {
             var rangeVal = await client.GetRangeValAsync(TopicTablePrefix);
             foreach (var (key, value) in rangeVal) AddToBrokerSocketsDictionary(brokerSocketsDict, brokerSockets, key, value);
@@ -55,7 +56,7 @@ namespace Consumer.Services
             return brokerSockets;
         }
 
-        public static void TopicTableChangedHandler(WatchEvent[] watchEvents, Dictionary<string, BrokerSocket> brokerSocketsDict, BrokerSocket[] brokerSockets)
+        public static void TopicTableChangedHandler(WatchEvent[] watchEvents, ConcurrentDictionary<string, BrokerSocket> brokerSocketsDict, BrokerSocket[] brokerSockets)
         {
             foreach (var watchEvent in watchEvents)
             {

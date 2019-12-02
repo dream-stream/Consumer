@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
@@ -17,6 +16,8 @@ namespace Consumer
         private static readonly Counter NoNewMessages = Metrics.CreateCounter("no_new_messages", "Number of times the message \"No new messages\" has been received.");
         private static readonly Gauge MessagesConsumedPerSecond = Metrics.CreateGauge("messages_consumed_per_second", 
             "Messages consumed for the current second.");
+
+        private static long testCounter;
 
         static async Task Main()
         {
@@ -45,9 +46,10 @@ namespace Consumer
 
             while (true)
             {
-                Console.WriteLine($"Messages consumed: {MessagesConsumedPerSecond.Value}");
+                Console.WriteLine($"Messages consumed: {Interlocked.Read(ref testCounter)}");
+                Console.WriteLine($"Batched Messages consumed: {BatchedMessagesConsumed.Value}");
                 MessagesConsumedPerSecond.Set(0);
-                await Task.Delay(10000);
+                await Task.Delay(1000);
             }
         }
 
@@ -55,13 +57,28 @@ namespace Consumer
         {
             BatchedMessagesConsumed.Inc(msg.Messages.Count);
 
-            foreach (var serializedMessages in msg.Messages)
+            for (var i = 0; i < msg.Messages.Count; i++)
             {
-                if (!(LZ4MessagePackSerializer.Deserialize<IMessage>(serializedMessages) is MessageContainer messages)) continue;
-                
+                if (!(LZ4MessagePackSerializer.Deserialize<IMessage>(msg.Messages[i]) is MessageContainer messages))
+                {
+                    Console.WriteLine("Failed!!!");
+                    continue;
+                }
+
+                Interlocked.Add(ref testCounter, messages.Messages.Count);
+
                 MessagesConsumed.Inc(messages.Messages.Count);
                 MessagesConsumedPerSecond.Inc(messages.Messages.Count);
             }
+
+
+            //foreach (var serializedMessages in msg.Messages)
+            //{
+            //    if (!(LZ4MessagePackSerializer.Deserialize<IMessage>(serializedMessages) is MessageContainer messages)) continue;
+                
+            //    MessagesConsumed.Inc(messages.Messages.Count);
+            //    MessagesConsumedPerSecond.Inc(messages.Messages.Count);
+            //}
 
             //if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
 
