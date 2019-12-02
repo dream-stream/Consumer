@@ -23,8 +23,11 @@ namespace Consumer.Services
         private readonly SemaphoreSlim _repartitionLock = new SemaphoreSlim(1, 1);
         private string _topic;
 
-        private CancellationTokenSource[] _cTokensForConsumerThreads;
-        private Action<MessageRequestResponse> _messageHandler;
+        private Action<MessageRequestResponse> _messageHandler; 
+        private int[] _partitions;
+
+        private bool _polling = false;
+        //private long[] _offsets;
 
         public ConsumerService(MessageProcessor messageProcessor)
         {
@@ -52,6 +55,57 @@ namespace Consumer.Services
                 BrokerSocketHandler.TopicTableChangedHandler(events, _brokerSocketsDict, _brokerSockets);
                 _brokerSocketHandlerLock.Release();
             });
+        }
+
+        private async Task DoPolling2()
+        {
+            _polling = true;
+
+            while (true)
+            {
+                try
+                {
+                    foreach (var partition in _partitions)
+                    {
+
+                        //if (_offsetHandler[partition]._lock.CurrentCount == 0) continue;
+                        if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
+                        {
+
+                            //await _offsetHandler[partition]._lock.WaitAsync();
+                            brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest
+                            {
+                                Topic = _topic,
+                                Partition = partition,
+                                OffSet = _offsetHandler[partition]._offset,
+                                ReadSize = _readSize,
+                                ConsumerGroup = _consumerGroup
+                            }));
+
+                            var (header, receivedSize) = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
+
+
+                            if (_offsetHandler[header.Partition]._offset == -1)
+                                _offsetHandler[header.Partition]._offset = 0;
+                            _offsetHandler[header.Partition]._offset += receivedSize;
+                            //_offsetHandler[header.Partition]._lock.Release();
+
+                            //if (receivedSize == 0)
+                            //    await Task.Delay(500);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+            }
+            
         }
 
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
@@ -113,7 +167,9 @@ namespace Consumer.Services
             _topic = topic;
             _consumerGroup = consumerGroup;
             var partitionCount = await TopicList.GetPartitionCount(_client, topic);
-            _cTokensForConsumerThreads = new CancellationTokenSource[partitionCount];
+            _partitions = new int[partitionCount];
+
+
 
             var consumerGroupTable = new ConsumerGroupTable(_client);
             await consumerGroupTable.ImHere(topic, _consumerGroup, _consumerId, PartitionsChangedHandler);
@@ -126,60 +182,69 @@ namespace Consumer.Services
                 switch (watchEvent.Type)
                 {
                     case Event.Types.EventType.Put:
-                        int[] partitions = null;
+                        //int[] partitions = null;
                         if (!string.IsNullOrEmpty(watchEvent.Value))
-                            partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
+                            _partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
 
-                        var partitionIndex = 0;
-                        if (partitions != null)
+                        _offsetHandler = new (SemaphoreSlim _lock, long _offset)[_partitions.Length];
+                        for (var i = 0; i < _offsetHandler.Length; i++)
                         {
-                            if (_offsetHandler == null)
-                            {
-                                _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
-                                for (var i = 0; i < _offsetHandler.Length; i++)
-                                {
-                                    _offsetHandler[i]._lock = new SemaphoreSlim(1,1);
-                                    _offsetHandler[i]._offset = -1;
-                                }
-                            }
-                            else
-                            {
-                                _repartitionLock.Wait();
-                                // resize array and put data still needed.
-                                var oldArray = new (SemaphoreSlim _lock, long _offset)[_offsetHandler.Length];
-                                _offsetHandler.CopyTo(oldArray, 0);
-                                _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
-                                for (var i = 0; i < _offsetHandler.Length; i++)
-                                {
-                                    _offsetHandler[i]._lock = new SemaphoreSlim(1, 1);
-                                    _offsetHandler[i]._offset = -1;
-                                }
-
-                                for (var i = 0; i < _offsetHandler.Length && i < oldArray.Length; i++) 
-                                    _offsetHandler[i] = oldArray[i];
-
-                                _repartitionLock.Release();
-                            }
+                            _offsetHandler[i]._lock = new SemaphoreSlim(1, 1);
+                            _offsetHandler[i]._offset = -1;
                         }
-                        for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
-                        {
-                            if (partitions != null && i == partitions[partitionIndex])
-                            {
-                                if(partitionIndex < partitions.Length - 1) partitionIndex++;
-                                if (_cTokensForConsumerThreads[i] != null) continue;
-                                // create new task and start and add cancellationToken to array
-                                _cTokensForConsumerThreads[i] = new CancellationTokenSource();
-                                var partition = i;
-                                Task.Run(async () => { await DoPolling(partition, _cTokensForConsumerThreads[partition].Token); }, _cTokensForConsumerThreads[i].Token);
-                            }
-                            else if (_cTokensForConsumerThreads[i] != null)
-                            {
-                                Console.WriteLine($"Killing task {i}");
-                                _cTokensForConsumerThreads[i].Cancel();
-                                _cTokensForConsumerThreads[i].Dispose();
-                                _cTokensForConsumerThreads[i] = null;
-                            }
-                        }
+                        if(!_polling) Task.Run(async () => { await DoPolling2(); });
+
+
+                        //var partitionIndex = 0;
+                        //if (partitions != null)
+                        //{
+                        //    if (_offsetHandler == null)
+                        //    {
+                        //        _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
+                        //        for (var i = 0; i < _offsetHandler.Length; i++)
+                        //        {
+                        //            _offsetHandler[i]._lock = new SemaphoreSlim(1,1);
+                        //            _offsetHandler[i]._offset = -1;
+                        //        }
+                        //    }
+                        //    else
+                        //    {
+                        //        _repartitionLock.Wait();
+                        //        // resize array and put data still needed.
+                        //        var oldArray = new (SemaphoreSlim _lock, long _offset)[_offsetHandler.Length];
+                        //        _offsetHandler.CopyTo(oldArray, 0);
+                        //        _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
+                        //        for (var i = 0; i < _offsetHandler.Length; i++)
+                        //        {
+                        //            _offsetHandler[i]._lock = new SemaphoreSlim(1, 1);
+                        //            _offsetHandler[i]._offset = -1;
+                        //        }
+
+                        //        for (var i = 0; i < _offsetHandler.Length && i < oldArray.Length; i++) 
+                        //            _offsetHandler[i] = oldArray[i];
+
+                        //        _repartitionLock.Release();
+                        //    }
+                        //}
+                        //for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
+                        //{
+                        //    if (partitions != null && i == partitions[partitionIndex])
+                        //    {
+                        //        if(partitionIndex < partitions.Length - 1) partitionIndex++;
+                        //        if (_cTokensForConsumerThreads[i] != null) continue;
+                        //        // create new task and start and add cancellationToken to array
+                        //        _cTokensForConsumerThreads[i] = new CancellationTokenSource();
+                        //        var partition = i;
+                        //        Task.Run(async () => { await DoPolling(partition, _cTokensForConsumerThreads[partition].Token); }, _cTokensForConsumerThreads[i].Token);
+                        //    }
+                        //    else if (_cTokensForConsumerThreads[i] != null)
+                        //    {
+                        //        Console.WriteLine($"Killing task {i}");
+                        //        _cTokensForConsumerThreads[i].Cancel();
+                        //        _cTokensForConsumerThreads[i].Dispose();
+                        //        _cTokensForConsumerThreads[i] = null;
+                        //    }
+                        //}
 
                         break;
                     case Event.Types.EventType.Delete:

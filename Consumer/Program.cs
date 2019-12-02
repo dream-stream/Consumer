@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
@@ -17,7 +18,6 @@ namespace Consumer
         private static readonly Gauge MessagesConsumedPerSecond = Metrics.CreateGauge("messages_consumed_per_second", 
             "Messages consumed for the current second.");
 
-        private static long testCounter;
 
         static async Task Main()
         {
@@ -43,10 +43,12 @@ namespace Consumer
             var client = EnvironmentVariables.IsDev ? new EtcdClient("http://localhost") : new EtcdClient("http://etcd");
             await consumer.InitSockets(client);
             await consumer.Subscribe(topic, consumerGroup, MessageHandler);
-
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
             while (true)
             {
-                Console.WriteLine($"Messages consumed: {Interlocked.Read(ref testCounter)}");
+                Console.WriteLine($"Messages consumed: {MessagesConsumed.Value}");
+                Console.WriteLine($"Messages Consumed Per Second: {MessagesConsumedPerSecond.Value}");
                 Console.WriteLine($"Batched Messages consumed: {BatchedMessagesConsumed.Value}");
                 MessagesConsumedPerSecond.Set(0);
                 await Task.Delay(1000);
@@ -64,8 +66,6 @@ namespace Consumer
                     Console.WriteLine("Failed!!!");
                     continue;
                 }
-
-                Interlocked.Add(ref testCounter, messages.Messages.Count);
 
                 MessagesConsumed.Inc(messages.Messages.Count);
                 MessagesConsumedPerSecond.Inc(messages.Messages.Count);
