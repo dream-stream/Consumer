@@ -66,8 +66,8 @@ namespace Consumer.Services
                     {
                         await _repartitionLock.WaitAsync(cancellationToken);
                         _repartitionLock.Release();
-                    } 
-                    //await _offsetHandler[partition]._lock.WaitAsync(cancellationToken);
+                    }
+                    await _offsetHandler[partition]._lock.WaitAsync(cancellationToken);
                     var offset = _offsetHandler[partition]._offset;
 
                     if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
@@ -89,7 +89,7 @@ namespace Consumer.Services
                         if (_offsetHandler[header.Partition]._offset == -1)
                             _offsetHandler[header.Partition]._offset = 0;
                         _offsetHandler[header.Partition]._offset += receivedSize;
-                        //_offsetHandler[header.Partition]._lock.Release();
+                        _offsetHandler[header.Partition]._lock.Release();
 
                         if (receivedSize == 0)
                             await Task.Delay(500, cancellationToken);

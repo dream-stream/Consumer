@@ -46,7 +46,8 @@ namespace Consumer
 
             while (true)
             {
-                Console.WriteLine($"Messages consumed: {Interlocked.Read(ref testCounter)}");
+                Console.WriteLine($"Messages consumed: {MessagesConsumed.Value}");
+                Console.WriteLine($"Messages Consumed Per Second: {MessagesConsumedPerSecond.Value}");
                 Console.WriteLine($"Batched Messages consumed: {BatchedMessagesConsumed.Value}");
                 MessagesConsumedPerSecond.Set(0);
                 await Task.Delay(1000);
