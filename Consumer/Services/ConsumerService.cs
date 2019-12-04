@@ -29,7 +29,7 @@ namespace Consumer.Services
         public ConsumerService(MessageProcessor messageProcessor)
         {
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
-            _readSize = 6000;
+            _readSize = 1024 * 1000;
             _consumerId = Guid.NewGuid();
 
             Console.WriteLine($"Id - {_consumerId}");
@@ -67,6 +67,7 @@ namespace Consumer.Services
                         await _repartitionLock.WaitAsync(cancellationToken);
                         _repartitionLock.Release();
                     }
+
                     await _offsetHandler[partition]._lock.WaitAsync(cancellationToken);
                     var offset = _offsetHandler[partition]._offset;
 
@@ -91,8 +92,8 @@ namespace Consumer.Services
                         _offsetHandler[header.Partition]._offset += receivedSize;
                         _offsetHandler[header.Partition]._lock.Release();
 
-                        if (receivedSize == 0)
-                            await Task.Delay(500, cancellationToken);
+                        //if (receivedSize == 0)
+                        //    await Task.Delay(500, cancellationToken);
                     }
                     else
                     {
