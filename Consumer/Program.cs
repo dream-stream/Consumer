@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
 using Consumer.Services;
@@ -13,11 +12,9 @@ namespace Consumer
     {
         private static readonly Counter BatchedMessagesConsumed = Metrics.CreateCounter("batched_messages_consumed", "Number of batched messages consumed.");
         private static readonly Counter MessagesConsumed = Metrics.CreateCounter("messages_consumed", "Number of messages consumed.");
-        private static readonly Counter NoNewMessages = Metrics.CreateCounter("no_new_messages", "Number of times the message \"No new messages\" has been received.");
-        private static readonly Gauge MessagesConsumedPerSecond = Metrics.CreateGauge("messages_consumed_per_second", 
-            "Messages consumed for the current second.");
+        //private static readonly Counter NoNewMessages = Metrics.CreateCounter("no_new_messages", "Number of times the message \"No new messages\" has been received.");
+        private static readonly Gauge MessagesConsumedPerSecond = Metrics.CreateGauge("messages_consumed_per_second", "Messages consumed for the current second.");
 
-        private static long testCounter;
 
         static async Task Main()
         {
@@ -46,10 +43,11 @@ namespace Consumer
 
             while (true)
             {
-                Console.WriteLine($"Messages consumed: {Interlocked.Read(ref testCounter)}");
+                Console.WriteLine($"Messages consumed: {MessagesConsumed.Value}");
                 Console.WriteLine($"Batched Messages consumed: {BatchedMessagesConsumed.Value}");
+                Console.WriteLine($"Messages Consumed Per 10 sec Second: {MessagesConsumedPerSecond.Value}");
                 MessagesConsumedPerSecond.Set(0);
-                await Task.Delay(1000);
+                await Task.Delay(10000);
             }
         }
 
@@ -64,8 +62,6 @@ namespace Consumer
                     Console.WriteLine("Failed!!!");
                     continue;
                 }
-
-                Interlocked.Add(ref testCounter, messages.Messages.Count);
 
                 MessagesConsumed.Inc(messages.Messages.Count);
                 MessagesConsumedPerSecond.Inc(messages.Messages.Count);
