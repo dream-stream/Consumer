@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: consumer
-        image: dreamstream/consumer:173
+        image: dreamstream/consumer:partitionthreadsv1
         imagePullPolicy: Always
         ports:
         - containerPort: 80

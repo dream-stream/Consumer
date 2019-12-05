@@ -56,36 +56,28 @@ namespace Consumer
 
         private static void MessageHandler(MessageRequestResponse msg)
         {
-            BatchedMessagesConsumed.Inc(msg.Messages.Count);
-
-            for (var i = 0; i < msg.Messages.Count; i++)
+            try
             {
-                if (!(LZ4MessagePackSerializer.Deserialize<IMessage>(msg.Messages[i]) is MessageContainer messages))
+                BatchedMessagesConsumed.Inc(msg.Messages.Count);
+
+                for (var i = 0; i < msg.Messages.Count; i++)
                 {
-                    Console.WriteLine("Failed!!!");
-                    continue;
+                    if (!(LZ4MessagePackSerializer.Deserialize<IMessage>(msg.Messages[i]) is MessageContainer messages))
+                    {
+                        Console.WriteLine("Failed!!!");
+                        continue;
+                    }
+
+                    Interlocked.Add(ref testCounter, messages.Messages.Count);
+
+                    MessagesConsumed.Inc(messages.Messages.Count);
+                    MessagesConsumedPerSecond.Inc(messages.Messages.Count);
                 }
-
-                Interlocked.Add(ref testCounter, messages.Messages.Count);
-
-                MessagesConsumed.Inc(messages.Messages.Count);
-                MessagesConsumedPerSecond.Inc(messages.Messages.Count);
             }
-
-
-            //foreach (var serializedMessages in msg.Messages)
-            //{
-            //    if (!(LZ4MessagePackSerializer.Deserialize<IMessage>(serializedMessages) is MessageContainer messages)) continue;
-                
-            //    MessagesConsumed.Inc(messages.Messages.Count);
-            //    MessagesConsumedPerSecond.Inc(messages.Messages.Count);
-            //}
-
-            //if(Math.Abs(MessagesConsumed.Value%1000) < 1) Console.WriteLine("1000 messages");
-
-            
-
-            //msg.Messages.ForEach(message => message.Print());
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         }
     }
 }
