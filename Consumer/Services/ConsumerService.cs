@@ -108,7 +108,8 @@ namespace Consumer.Services
             }
         }
 
-        public async Task Subscribe(string topic, string consumerGroup, Action<MessageRequestResponse> messageHandler)
+        public async Task<ConsumerGroupTable> Subscribe(string topic, string consumerGroup,
+            Action<MessageRequestResponse> messageHandler)
         {
             _messageHandler = messageHandler;
             _topic = topic;
@@ -118,6 +119,8 @@ namespace Consumer.Services
 
             var consumerGroupTable = new ConsumerGroupTable(_client);
             await consumerGroupTable.ImHere(topic, _consumerGroup, _consumerId, PartitionsChangedHandler);
+
+            return consumerGroupTable;
         }
 
         private void PartitionsChangedHandler(WatchEvent[] watchEvents)

@@ -39,15 +39,18 @@ namespace Consumer
             
             var client = EnvironmentVariables.IsDev ? new EtcdClient("http://localhost") : new EtcdClient("http://etcd");
             await consumer.InitSockets(client);
-            await consumer.Subscribe(topic, consumerGroup, MessageHandler);
+            var consumerGroupTable = await consumer.Subscribe(topic, consumerGroup, MessageHandler);
 
             while (true)
             {
                 Console.WriteLine($"Messages consumed: {MessagesConsumed.Value}");
                 Console.WriteLine($"Batched Messages consumed: {BatchedMessagesConsumed.Value}");
-                Console.WriteLine($"Messages Consumed Per 10 sec Second: {MessagesConsumedPerSecond.Value}");
+                Console.WriteLine($"Messages Consumed Per 5 sec Second: {MessagesConsumedPerSecond.Value}");
+
+                consumerGroupTable.LeaseKeepAlive(null);
+
                 MessagesConsumedPerSecond.Set(0);
-                await Task.Delay(10000);
+                await Task.Delay(5000);
             }
         }
 

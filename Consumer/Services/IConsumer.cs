@@ -7,7 +7,8 @@ namespace Consumer.Services
 {
     public interface IConsumer
     {
-        Task Subscribe(string topic, string consumerGroup, Action<MessageRequestResponse> messageHandler);
+        Task<ConsumerGroupTable> Subscribe(string topic, string consumerGroup,
+            Action<MessageRequestResponse> messageHandler);
         Task UnSubscribe(Guid consumerId);
         Task CloseConnection();
         Task InitSockets(EtcdClient client);
