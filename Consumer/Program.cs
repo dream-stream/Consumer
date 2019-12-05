@@ -44,10 +44,6 @@ namespace Consumer
             while (true)
             {
                 Console.WriteLine($"Messages consumed: {MessagesConsumed.Value}");
-<<<<<<< HEAD
-                Console.WriteLine($"Messages Consumed Per Second: {MessagesConsumedPerSecond.Value}");
-=======
->>>>>>> 19b54f74fcf8e6687dd58d02c1766dd727754d44
                 Console.WriteLine($"Batched Messages consumed: {BatchedMessagesConsumed.Value}");
                 Console.WriteLine($"Messages Consumed Per 10 sec Second: {MessagesConsumedPerSecond.Value}");
                 MessagesConsumedPerSecond.Set(0);
@@ -68,10 +64,6 @@ namespace Consumer
                         Console.WriteLine("Failed!!!");
                         continue;
                     }
-
-<<<<<<< HEAD
-                    Interlocked.Add(ref testCounter, messages.Messages.Count);
-
                     MessagesConsumed.Inc(messages.Messages.Count);
                     MessagesConsumedPerSecond.Inc(messages.Messages.Count);
                 }
@@ -79,10 +71,6 @@ namespace Consumer
             catch (Exception e)
             {
                 Console.WriteLine(e);
-=======
-                MessagesConsumed.Inc(messages.Messages.Count);
-                MessagesConsumedPerSecond.Inc(messages.Messages.Count);
->>>>>>> 19b54f74fcf8e6687dd58d02c1766dd727754d44
             }
         }
     }
