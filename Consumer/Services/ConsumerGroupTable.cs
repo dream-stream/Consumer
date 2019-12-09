@@ -10,7 +10,7 @@ namespace Consumer.Services
     public class ConsumerGroupTable
     {
         // TODO back to 10
-        private const int LeaseTtl = 10;
+        private const int LeaseTtl = 20;
         private readonly EtcdClient _client;
         private long _leaseId;
         private string _key;
