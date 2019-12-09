@@ -19,8 +19,6 @@ namespace Consumer.Services
             return LZ4MessagePackSerializer.Deserialize<T>(message);
         }
 
-        private ulong testCounter = 0;
-
         public async Task<(MessageHeader header, long offset)> ReceiveMessage<T>(BrokerSocket brokerSocket, int readSize, Action<MessageRequestResponse> handler) where T : IMessage
         {
             var buffer = new byte[readSize];
@@ -36,8 +34,6 @@ namespace Consumer.Services
 
                     return (msg.Header, msg.Offset);
                 case NoNewMessage msg:
-                    if(testCounter++ % 1000 == 0)
-                        Console.WriteLine("No new message * 1000");
                     return (msg.Header, 0);
                 case OffsetResponse msg:
                     return (new MessageHeader {Topic = msg.Topic, Partition = msg.Partition}, msg.Offset + 1);
