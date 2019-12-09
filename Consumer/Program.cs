@@ -64,7 +64,7 @@ namespace Consumer
         {
             try
             {
-                BatchedMessagesConsumed.Inc(msg.Messages.Count);
+                BatchedMessagesConsumed.WithLabels($"{msg.Header.Topic}/{msg.Header.Partition}").Inc(msg.Messages.Count);
 
                 for (var i = 0; i < msg.Messages.Count; i++)
                 {
@@ -74,7 +74,7 @@ namespace Consumer
                         continue;
                     }
                     MessagesConsumed.WithLabels($"{msg.Header.Topic}/{msg.Header.Partition}").Inc(messages.Messages.Count);
-                    MessagesConsumedPerSecond.WithLabels($"{msg.Header.Topic}/{msg.Header.Partition}").Inc(messages.Messages.Count);
+                    MessagesConsumedPerSecond.Inc(messages.Messages.Count);
                 }
             }
             catch (Exception e)
