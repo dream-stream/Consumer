@@ -10,8 +10,14 @@ namespace Consumer
 {
     internal class Program
     {
-        private static readonly Counter BatchedMessagesConsumed = Metrics.CreateCounter("batched_messages_consumed", "Number of batched messages consumed.");
-        private static readonly Counter MessagesConsumed = Metrics.CreateCounter("messages_consumed", "Number of messages consumed.");
+        private static readonly Counter BatchedMessagesConsumed = Metrics.CreateCounter("batched_messages_consumed", "Number of batched messages consumed.", new CounterConfiguration
+        {
+            LabelNames = new[] { "TopicPartition" }
+        });
+        private static readonly Counter MessagesConsumed = Metrics.CreateCounter("messages_consumed", "Number of messages consumed.", new CounterConfiguration
+        {
+            LabelNames = new[] { "TopicPartition" }
+        });
         //private static readonly Counter NoNewMessages = Metrics.CreateCounter("no_new_messages", "Number of times the message \"No new messages\" has been received.");
         private static readonly Gauge MessagesConsumedPerSecond = Metrics.CreateGauge("messages_consumed_per_second", "Messages consumed for the current second.");
 
@@ -67,8 +73,8 @@ namespace Consumer
                         Console.WriteLine("Failed!!!");
                         continue;
                     }
-                    MessagesConsumed.Inc(messages.Messages.Count);
-                    MessagesConsumedPerSecond.Inc(messages.Messages.Count);
+                    MessagesConsumed.WithLabels($"{msg.Header.Topic}/{msg.Header.Partition}").Inc(messages.Messages.Count);
+                    MessagesConsumedPerSecond.WithLabels($"{msg.Header.Topic}/{msg.Header.Partition}").Inc(messages.Messages.Count);
                 }
             }
             catch (Exception e)
