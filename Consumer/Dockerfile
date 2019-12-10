@@ -1,6 +1,5 @@
-FROM dreamstream/dotnetcore:3.0.0-bullseye-slim AS base
+FROM dreamstream/librdkafka:1.2.1-1-bullseye-slim-dotnetcore3.0.0 AS base
 WORKDIR /app
-EXPOSE 80
 
 FROM mcr.microsoft.com/dotnet/core/sdk:3.0-alpine AS build
 WORKDIR /src

@@ -11,7 +11,7 @@ using Prometheus;
 
 namespace Consumer
 {
-    internal class Program
+    internal class ProgramV2
     {
         private static readonly Counter BatchedMessagesConsumed = Metrics.CreateCounter("batched_messages_consumed", "Number of batched messages consumed.", new CounterConfiguration
         {
@@ -25,7 +25,7 @@ namespace Consumer
         private static readonly Gauge MessagesConsumedPerSecond = Metrics.CreateGauge("messages_consumed_per_second", "Messages consumed for the current second.");
 
 
-        static async Task Main()
+        static async Task Main2()
         {
             EnvironmentVariables.SetFromEnvironmentVariables();
             EnvironmentVariables.PrintProperties();
@@ -58,8 +58,8 @@ namespace Consumer
             c.Subscribe(topicName);
 
             var cts = new CancellationTokenSource();
-            Console.CancelKeyPress += (_, e) =>
-            {
+            Console.CancelKeyPress += (_, e) => 
+            { 
                 e.Cancel = true; // prevent the process from terminating. 
                 cts.Cancel();
             };
@@ -73,7 +73,7 @@ namespace Consumer
                         var cr = c.Consume(cts.Token);
                         //Console.WriteLine($"Consumed message '{cr.Value}' at: '{cr.TopicPartitionOffset}'.");
                         MessagesConsumed.WithLabels($"Kafka").Inc();
-                        if (MessagesConsumed.Value % 25000 == 1) Console.WriteLine($"Messages Consumed: {MessagesConsumed.Value}");
+                        if(MessagesConsumed.Value % 100000 == 0) Console.WriteLine($"Messages Consumed: {MessagesConsumed.Value}");
                     }
                     catch (ConsumeException e)
                     {
@@ -97,7 +97,8 @@ namespace Consumer
             {
                 GroupId = consumerGroup,
                 BootstrapServers = bootstrapServers,
-                AutoOffsetReset = AutoOffsetReset.Earliest
+                AutoOffsetReset = AutoOffsetReset.Earliest,
+                EnableAutoCommit = true
             };
             return conf;
         }

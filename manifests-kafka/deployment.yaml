@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer-kafka
+  labels:
+    app: consumer-kafka
+    k8s-app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer-kafka
+  template:
+    metadata:
+      labels:
+        app: consumer-kafka
+        k8s-app: prometheus
+    spec:
+      containers:
+      - name: consumer-kafka
+        image: dreamstream/consumer:kafka-v2
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: APPLICATION_TYPE
+          value: "Kafka"
+        - name: TOPIC_NAME
+          value: "Topic3"
+        - name: CONSUMER_GROUP
+          value: "MyConsumerGroup"
