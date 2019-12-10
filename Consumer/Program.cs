@@ -54,7 +54,7 @@ namespace Consumer
         private static void Kafka(string topicName, string consumerGroup)
         {
             var conf = KafkaConsumerConfig(consumerGroup);
-            using var c = new ConsumerBuilder<Ignore, string>(conf).Build();
+            using var c = new ConsumerBuilder<Ignore, Message>(conf).Build();
             c.Subscribe(topicName);
 
             var cts = new CancellationTokenSource();
@@ -71,8 +71,9 @@ namespace Consumer
                     try
                     {
                         var cr = c.Consume(cts.Token);
-                        //Console.WriteLine($"Consumed message '{cr.Value}' at: '{cr.TopicPartitionOffset}'.");
-                        MessagesConsumed.WithLabels($"Kafka").Inc();
+                        if(cr.Value != null) MessagesConsumed.WithLabels($"Kafka").Inc();
+                        //Console.WriteLine($"Consumed message '{cr.Message}' at: '{cr.TopicPartitionOffset}'.");
+
                         if (MessagesConsumed.Value % 25000 == 1) Console.WriteLine($"Messages Consumed: {MessagesConsumed.Value}");
                     }
                     catch (ConsumeException e)
