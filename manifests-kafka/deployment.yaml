@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: consumer-kafka
-        image: dreamstream/consumer:kafka-v2
+        image: dreamstream/consumer:232
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -28,6 +28,6 @@ spec:
         - name: APPLICATION_TYPE
           value: "Kafka"
         - name: TOPIC_NAME
-          value: "Topic3"
+          value: "Topic4"
         - name: CONSUMER_GROUP
           value: "MyConsumerGroup"

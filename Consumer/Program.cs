@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
+using Confluent.Kafka.SyncOverAsync;
 using Consumer.Models.Messages;
 using Consumer.Services;
 using dotnet_etcd;
 using MessagePack;
+using Microsoft.Hadoop.Avro;
 using Prometheus;
 
 namespace Consumer
@@ -54,7 +57,7 @@ namespace Consumer
         private static void Kafka(string topicName, string consumerGroup)
         {
             var conf = KafkaConsumerConfig(consumerGroup);
-            using var c = new ConsumerBuilder<Ignore, Message>(conf).Build();
+            using var c = new ConsumerBuilder<Ignore, Message>(conf).SetValueDeserializer(new AvroDeserializer()).Build();
             c.Subscribe(topicName);
 
             var cts = new CancellationTokenSource();
@@ -146,6 +149,19 @@ namespace Consumer
             {
                 Console.WriteLine(e);
             }
+        }
+    }
+
+    internal class AvroDeserializer : IDeserializer<Message>
+    {
+        readonly IAvroSerializer<Message> _avroSerializer = AvroSerializer.Create<Message>(new AvroSerializerSettings());
+
+        public Message Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+        {
+            //throw new NotImplementedException();
+            var ms = new MemoryStream(data.ToArray());
+            var message = _avroSerializer.Deserialize(ms);
+            return message;
         }
     }
 }
