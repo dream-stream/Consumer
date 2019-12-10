@@ -4,7 +4,7 @@ using MessagePack;
 namespace Consumer.Models.Messages
 {
     [MessagePackObject]
-    public class MessageRequestResponse
+    public class MessageRequestResponse : IMessage
     {
         [Key(1)]
         public int Offset { get; set; }

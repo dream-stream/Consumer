@@ -31,17 +31,10 @@ namespace Consumer
             }
 
             const string topic = "Topic3";
-            const string consumerGroup = "Anders-Is-A-Noob";
-            //var timer = new Timer(_ =>
-            //{
-            //    Console.WriteLine($"Messages consumed: {MessagesConsumedPerSecond.Value}");
-            //    MessagesConsumedPerSecond.Set(0);
-
-            //}, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
-
+            const string consumerGroup = "MyConsumerGroup";
             Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
 
-            IConsumer consumer = new ConsumerService(new MessageProcessor());
+            IConsumer consumer = new ConsumerService();
             
             var client = EnvironmentVariables.IsDev ? new EtcdClient("http://localhost") : new EtcdClient("http://etcd");
             await consumer.InitSockets(client);

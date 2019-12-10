@@ -10,7 +10,6 @@ namespace Consumer.Services
         Task<ConsumerGroupTable> Subscribe(string topic, string consumerGroup,
             Action<MessageRequestResponse> messageHandler);
         Task UnSubscribe(Guid consumerId);
-        Task CloseConnection();
         Task InitSockets(EtcdClient client);
     }
 }

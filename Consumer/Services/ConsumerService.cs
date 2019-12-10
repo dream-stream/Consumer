@@ -1,10 +1,13 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Consumer.Models.Messages;
 using dotnet_etcd;
+using MessagePack;
 using Mvccpb;
 
 namespace Consumer.Services
@@ -13,22 +16,18 @@ namespace Consumer.Services
     {
         private readonly Guid _consumerId;
         private string _consumerGroup;
-        private static (SemaphoreSlim _lock, long _offset)[] _offsetHandler;
         private readonly int _readSize;
-        private BrokerSocket[] _brokerSockets;
-        private readonly ConcurrentDictionary<string, BrokerSocket> _brokerSocketsDict = new ConcurrentDictionary<string, BrokerSocket>();
-        private readonly MessageProcessor _messageProcessor;
+        private HttpClient[] _brokerClients;
+        private readonly Dictionary<string, HttpClient> _brokerClientDict = new Dictionary<string, HttpClient>();
         private EtcdClient _client;
-        private readonly Semaphore _brokerSocketHandlerLock = new Semaphore(1, 1);
-        private readonly SemaphoreSlim _repartitionLock = new SemaphoreSlim(1, 1);
+        private readonly Semaphore _brokerClientHandlerLock = new Semaphore(1, 1);
         private string _topic;
 
         private CancellationTokenSource[] _cTokensForConsumerThreads;
         private Action<MessageRequestResponse> _messageHandler;
 
-        public ConsumerService(MessageProcessor messageProcessor)
+        public ConsumerService()
         {
-            _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
             _readSize = 1024 * 900;
             _consumerId = Guid.NewGuid();
 
@@ -38,19 +37,19 @@ namespace Consumer.Services
         public async Task InitSockets(EtcdClient client)
         {
             _client = client;
-            _brokerSockets = await BrokerSocketHandler.UpdateBrokerSockets(client, _brokerSockets);
-            await BrokerSocketHandler.UpdateBrokerSocketsDictionary(client, _brokerSocketsDict, _brokerSockets);
-            client.WatchRange(BrokerSocketHandler.BrokerTablePrefix, async events =>
+            _brokerClients = await BrokerHandler.UpdateBrokers(client, _brokerClients);
+            await BrokerHandler.UpdateBrokerHttpClientsDictionary(client, _brokerClientDict, _brokerClients);
+            client.WatchRange(BrokerHandler.BrokerTablePrefix, events =>
             {
-                _brokerSocketHandlerLock.WaitOne();
-                _brokerSockets = await BrokerSocketHandler.BrokerTableChangedHandler(events, _brokerSockets);
-                _brokerSocketHandlerLock.Release();
+                _brokerClientHandlerLock.WaitOne();
+                _brokerClients = BrokerHandler.BrokerTableChangedHandler(events, _brokerClients);
+                _brokerClientHandlerLock.Release();
             });
-            client.WatchRange(BrokerSocketHandler.TopicTablePrefix, events =>
+            client.WatchRange(BrokerHandler.TopicTablePrefix, events =>
             {
-                _brokerSocketHandlerLock.WaitOne();
-                BrokerSocketHandler.TopicTableChangedHandler(events, _brokerSocketsDict, _brokerSockets);
-                _brokerSocketHandlerLock.Release();
+                _brokerClientHandlerLock.WaitOne();
+                BrokerHandler.TopicTableChangedHandler(events, _brokerClientDict, _brokerClients);
+                _brokerClientHandlerLock.Release();
             });
         }
 
@@ -59,41 +58,36 @@ namespace Consumer.Services
             try
             {
                 Console.WriteLine($"Started Polling of partition {partition}");
-
+                var offset = -1;
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (_repartitionLock.CurrentCount == 0)
+                    if (_brokerClientDict.TryGetValue($"{_topic}/{partition}", out var brokerClient))
                     {
-                        await _repartitionLock.WaitAsync(cancellationToken);
-                        _repartitionLock.Release();
-                    }
-
-                    await _offsetHandler[partition]._lock.WaitAsync(cancellationToken);
-                    var offset = _offsetHandler[partition]._offset;
-
-                    if (_brokerSocketsDict.TryGetValue($"{_topic}/{partition}", out var brokerSocket))
-                    {
-#pragma warning disable 4014
-                        brokerSocket.SendMessage(_messageProcessor.Serialize<IMessage>(new MessageRequest
+                        var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", cancellationToken);
+                        
+                        if (!response.IsSuccessStatusCode)
                         {
-                            Topic = _topic,
-                            Partition = partition,
-                            OffSet = offset,
-                            ReadSize = _readSize,
-                            ConsumerGroup = _consumerGroup
-                        }));
-#pragma warning restore 4014
-
-                        var (header, receivedSize) = await _messageProcessor.ReceiveMessage<IMessage>(brokerSocket, _readSize, _messageHandler);
-
-
-                        if (_offsetHandler[header.Partition]._offset == -1)
-                            _offsetHandler[header.Partition]._offset = 0;
-                        _offsetHandler[header.Partition]._offset += receivedSize;
-                        _offsetHandler[header.Partition]._lock.Release();
-
-                        if (receivedSize == 0)
+                            Console.WriteLine($"Non successful response from storage: {response.StatusCode}");
+                            continue;
+                        }
+                        
+                        if (response.StatusCode == HttpStatusCode.NoContent)
+                        {
                             await Task.Delay(500, cancellationToken);
+                            continue;
+                        }
+
+                        var serializedData = await response.Content.ReadAsByteArrayAsync();
+                        if (LZ4MessagePackSerializer.Deserialize<IMessage>(serializedData) is MessageRequestResponse
+                            data)
+                        {
+                            if (offset == -1)
+                                offset = 0;
+
+                            offset += data.Offset;
+                            Console.WriteLine($"{_topic}/{partition} - offset: {offset}");
+                            _messageHandler(data);
+                        }
                     }
                     else
                     {
@@ -135,36 +129,6 @@ namespace Consumer.Services
                             partitions = watchEvent.Value.Split(',').Select(int.Parse).ToArray();
 
                         var partitionIndex = 0;
-                        if (partitions != null)
-                        {
-                            if (_offsetHandler == null)
-                            {
-                                _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
-                                for (var i = 0; i < _offsetHandler.Length; i++)
-                                {
-                                    _offsetHandler[i]._lock = new SemaphoreSlim(1,1);
-                                    _offsetHandler[i]._offset = -1;
-                                }
-                            }
-                            else
-                            {
-                                _repartitionLock.Wait();
-                                // resize array and put data still needed.
-                                var oldArray = new (SemaphoreSlim _lock, long _offset)[_offsetHandler.Length];
-                                _offsetHandler.CopyTo(oldArray, 0);
-                                _offsetHandler = new (SemaphoreSlim _lock, long _offset)[partitions.Length];
-                                for (var i = 0; i < _offsetHandler.Length; i++)
-                                {
-                                    _offsetHandler[i]._lock = new SemaphoreSlim(1, 1);
-                                    _offsetHandler[i]._offset = -1;
-                                }
-
-                                for (var i = 0; i < _offsetHandler.Length && i < oldArray.Length; i++) 
-                                    _offsetHandler[i] = oldArray[i];
-
-                                _repartitionLock.Release();
-                            }
-                        }
                         for (var i = 0; i < _cTokensForConsumerThreads.Length; i++)
                         {
                             if (partitions != null && i == partitions[partitionIndex])
@@ -198,14 +162,6 @@ namespace Consumer.Services
         public async Task UnSubscribe(Guid consumerId)
         {
             await Task.Run(() => Task.CompletedTask); //TODO Unsubscribe
-        }
-
-        public async Task CloseConnection()
-        {
-            foreach (var brokerSocket in _brokerSockets)
-            {
-                if (brokerSocket != null) await brokerSocket.CloseConnection();
-            }
         }
     }
 }
