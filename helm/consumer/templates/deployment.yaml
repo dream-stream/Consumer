@@ -1,0 +1,31 @@
+{{- $root := . -}}
+{{ range $k, $v := until (atoi (quote .Values.Replicas) | default 5) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "consumer-{{$v}}"
+  labels:
+    app: "consumer-{{$v}}"
+    k8s-app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "consumer-{{$v}}"
+  template:
+    metadata:
+      labels:
+        app: "consumer-{{$v}}"
+        k8s-app: prometheus
+    spec:
+      containers:
+      - name: "consumer-{{$v}}"
+        image: dreamstream/consumer:227
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+---
+{{end}}
