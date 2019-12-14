@@ -64,7 +64,6 @@ namespace Consumer.Services
                     if (_brokerClientDict.TryGetValue($"{_topic}/{partition}", out var brokerClient))
                     {
                         var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", cancellationToken);
-                        Console.WriteLine($"response gotten for partition {partition}");
                         
                         if (!response.IsSuccessStatusCode)
                         {
