@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using Confluent.Kafka;
 using Consumer.Models.Messages;
 using Consumer.Services;
 using dotnet_etcd;
@@ -24,21 +28,91 @@ namespace Consumer
 
         static async Task Main()
         {
-            if(!EnvironmentVariables.IsDev)
+            EnvironmentVariables.SetFromEnvironmentVariables();
+            EnvironmentVariables.PrintProperties();
+            if (!EnvironmentVariables.IsDev)
             {
                 var metricServer = new MetricServer(80);
                 metricServer.Start();
             }
 
-            const string topic = "Topic3";
-            const string consumerGroup = "MyConsumerGroup";
-            Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
+            Console.WriteLine($"Starting {EnvironmentVariables.ApplicationType} Consumer");
+            switch (EnvironmentVariables.ApplicationType)
+            {
+                case "Dream-Stream":
+                    await DreamStream(EnvironmentVariables.TopicName, EnvironmentVariables.ConsumerGroup);
+                    break;
+                case "Kafka":
+                    Kafka(EnvironmentVariables.TopicName, EnvironmentVariables.ConsumerGroup);
+                    break;
+                case "Nats-Streaming":
+                    break;
+                default:
+                    throw new NotImplementedException($"The method {EnvironmentVariables.ApplicationType} has not been implemented");
+            }
+        }
 
+        private static void Kafka(string topicName, string consumerGroup)
+        {
+            var conf = KafkaConsumerConfig(consumerGroup);
+
+            using var c = new ConsumerBuilder<Ignore, Message>(conf).SetValueDeserializer(new MySerializer()).Build();
+            c.Subscribe(topicName);
+
+            var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true; // prevent the process from terminating. 
+                cts.Cancel();
+            };
+
+            try
+            {
+                while (true)
+                {
+                    try
+                    {
+                        var cr = c.Consume(cts.Token);
+                        if(cr.Value != null) MessagesConsumed.WithLabels($"Kafka").Inc();
+                        //Console.WriteLine($"Consumed message '{cr.Message}' at: '{cr.TopicPartitionOffset}'.");
+
+                        if (MessagesConsumed.Value % 25000 == 1) Console.WriteLine($"Messages Consumed: {MessagesConsumed.Value}");
+                    }
+                    catch (ConsumeException e)
+                    {
+                        Console.WriteLine($"Error occured: {e.Error.Reason}");
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Ensure the consumer leaves the group cleanly and final offsets are committed.
+                c.Close();
+            }
+        }
+
+        private static ConsumerConfig KafkaConsumerConfig(string consumerGroup)
+        {
+            var list = new List<string>();
+            for (var i = 0; i < 3; i++) list.Add($"kf-kafka-{i}.kf-hs-kafka.default.svc.cluster.local:9093");
+            var bootstrapServers = string.Join(',', list);
+            var conf = new ConsumerConfig
+            {
+                GroupId = consumerGroup,
+                BootstrapServers = bootstrapServers,
+                AutoOffsetReset = AutoOffsetReset.Earliest
+            };
+            return conf;
+        }
+
+        private static async Task DreamStream(string topic, string consumerGroup)
+        {
+            Console.WriteLine($"Starting Consumer subscribing to topic {topic} with consumer group {consumerGroup}");
             IConsumer consumer = new ConsumerService();
-            
+
             var client = EnvironmentVariables.IsDev ? new EtcdClient("http://localhost") : new EtcdClient("http://etcd");
             await consumer.InitSockets(client);
-            var consumerGroupTable = await consumer.Subscribe(topic, consumerGroup, MessageHandler);
+            var consumerGroupTable = await consumer.Subscribe(topic, consumerGroup, DreamStreamMessageHandler);
 
             while (true)
             {
@@ -53,7 +127,7 @@ namespace Consumer
             }
         }
 
-        private static void MessageHandler(MessageRequestResponse msg)
+        private static void DreamStreamMessageHandler(MessageRequestResponse msg)
         {
             try
             {
@@ -74,6 +148,14 @@ namespace Consumer
             {
                 Console.WriteLine(e);
             }
+        }
+    }
+
+    internal class MySerializer : IDeserializer<Message>
+    {
+        public Message Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
+        {
+            return LZ4MessagePackSerializer.Deserialize<Message>(data.ToArray());
         }
     }
 }
