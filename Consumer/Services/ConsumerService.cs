@@ -99,7 +99,8 @@ namespace Consumer.Services
                     Console.WriteLine(e);
                 }
             }
-            
+
+            Console.WriteLine($"stopped pulling partition {partition}");
         }
 
         public async Task<ConsumerGroupTable> Subscribe(string topic, string consumerGroup,
