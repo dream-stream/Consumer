@@ -75,6 +75,8 @@ namespace Consumer.Services
                         if (response.StatusCode == HttpStatusCode.NoContent)
                         {
                             await Task.Delay(500, cancellationToken);
+                            if (offset == -1)
+                                offset = 0;
                             continue;
                         }
 

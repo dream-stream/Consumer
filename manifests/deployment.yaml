@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: consumer
-        image: dreamstream/consumer:258
+        image: dreamstream/consumer:259
         imagePullPolicy: Always
         ports:
         - containerPort: 80
