@@ -55,11 +55,11 @@ namespace Consumer.Services
 
         private async Task DoPolling(int partition, CancellationToken cancellationToken)
         {
-            try
+            Console.WriteLine($"Started Polling of partition {partition}");
+            var offset = -1;
+            while (!cancellationToken.IsCancellationRequested)
             {
-                Console.WriteLine($"Started Polling of partition {partition}");
-                var offset = -1;
-                while (!cancellationToken.IsCancellationRequested)
+                try
                 {
                     if (_brokerClientDict.TryGetValue($"{_topic}/{partition}", out var brokerClient))
                     {
@@ -70,22 +70,22 @@ namespace Consumer.Services
                             Console.WriteLine($"Non successful response from storage: {response.StatusCode}");
                             continue;
                         }
-                        
+                    
                         if (response.StatusCode == HttpStatusCode.NoContent)
                         {
                             await Task.Delay(500, cancellationToken);
+                            if (offset == -1)
+                                offset = 0;
                             continue;
                         }
 
                         var serializedData = await response.Content.ReadAsByteArrayAsync();
-                        if (LZ4MessagePackSerializer.Deserialize<IMessage>(serializedData) is MessageRequestResponse
-                            data)
+                        if (LZ4MessagePackSerializer.Deserialize<IMessage>(serializedData) is MessageRequestResponse data)
                         {
                             if (offset == -1)
                                 offset = 0;
 
                             offset += data.Offset;
-                            Console.WriteLine($"{_topic}/{partition} - offset: {offset}");
                             _messageHandler(data);
                         }
                     }
@@ -94,12 +94,14 @@ namespace Consumer.Services
                         Console.WriteLine($"Failed to get brokerSocket {_topic}/{partition}");
                     }
                 }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Exception thrown in DoPolling");
+                    Console.WriteLine(e);
+                }
             }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                throw;
-            }
+
+            Console.WriteLine($"stopped pulling partition {partition}");
         }
 
         public async Task<ConsumerGroupTable> Subscribe(string topic, string consumerGroup,
