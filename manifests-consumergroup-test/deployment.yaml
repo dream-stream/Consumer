@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: consumer
-        image: dreamstream/consumer:260
+        image: dreamstream/consumer:265
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -27,3 +27,10 @@ spec:
           value: "Production"
         - name: CONSUMER_GROUP
           value: MyConsumerGroup
+        resources:
+          requests:
+            memory: "500Mi"
+            cpu: "1500m"
+          limits:
+            memory: "500Mi"
+            cpu: "1500m"

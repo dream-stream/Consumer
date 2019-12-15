@@ -1,5 +1,4 @@
-{{- $root := . -}}
-{{ range $k, $v := until (atoi (quote .Values.Replicas) | default 5) }}
+{{ range $k, $v := until (int .Values.Replicas)}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,12 +19,25 @@ spec:
     spec:
       containers:
       - name: "consumer-{{$v}}"
-        image: dreamstream/consumer:227
+        image: dreamstream/consumer:265
         imagePullPolicy: Always
         ports:
         - containerPort: 80
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: "Production"
+        - name: CONSUMER_GROUP
+          value: "MyConsumerGroup-{{$v}}"
+        - name: APPLICATION_TYPE
+          value: "Kafka"
+        - name: TOPIC_NAME
+          value: "Topic3"
+        resources:
+          requests:
+            memory: "500Mi"
+            cpu: "1500m"
+          limits:
+            memory: "500Mi"
+            cpu: "1500m"
 ---
 {{end}}
