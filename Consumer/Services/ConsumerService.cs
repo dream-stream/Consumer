@@ -68,12 +68,13 @@ namespace Consumer.Services
                         
                         if (!response.IsSuccessStatusCode)
                         {
-                            Console.WriteLine($"Non successful response from storage: {response.StatusCode}");
+                            Console.WriteLine($"Non successful response from storage: {response.StatusCode} - partition {partition}");
                             continue;
                         }
                     
                         if (response.StatusCode == HttpStatusCode.NoContent)
                         {
+                            Console.WriteLine($"No Content received - partition: {partition}");
                             await Task.Delay(500, cancellationToken);
                             if (offset == -1)
                                 offset = 0;
@@ -85,7 +86,7 @@ namespace Consumer.Services
                         {
                             if (response.StatusCode == HttpStatusCode.PartialContent)
                             {
-                                Console.WriteLine($"Moved Offset!!! with {data.Offset}");
+                                Console.WriteLine($"Moved Offset!!! with {data.Offset} - partition {partition}");
                                 offset += data.Offset;
                                 continue;
                             }
