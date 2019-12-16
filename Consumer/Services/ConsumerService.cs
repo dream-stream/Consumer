@@ -82,6 +82,13 @@ namespace Consumer.Services
                         var serializedData = await response.Content.ReadAsByteArrayAsync();
                         if (LZ4MessagePackSerializer.Deserialize<IMessage>(serializedData) is MessageRequestResponse data)
                         {
+                            if (response.StatusCode == HttpStatusCode.PartialContent)
+                            {
+                                Console.WriteLine("Moved Offset!!!");
+                                offset += data.Offset;
+                                continue;
+                            }
+
                             if (offset == -1)
                                 offset = 0;
 
