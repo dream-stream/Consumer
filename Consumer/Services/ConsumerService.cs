@@ -63,7 +63,8 @@ namespace Consumer.Services
                 {
                     if (_brokerClientDict.TryGetValue($"{_topic}/{partition}", out var brokerClient))
                     {
-                        var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", cancellationToken);
+                        var timeoutToken = new CancellationTokenSource(3000);
+                        var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", timeoutToken.Token);
                         
                         if (!response.IsSuccessStatusCode)
                         {
@@ -93,6 +94,7 @@ namespace Consumer.Services
                                 offset = 0;
 
                             offset += data.Offset;
+                            Console.WriteLine($"partition: {partition}, offset: {offset}");
                             _messageHandler(data);
                         }
                     }
