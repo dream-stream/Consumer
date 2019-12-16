@@ -116,12 +116,8 @@ namespace Consumer
 
             while (true)
             {
-                Console.WriteLine($"Messages consumed: {MessagesConsumed.Value}");
-                Console.WriteLine($"Batched Messages consumed: {BatchedMessagesConsumed.Value}");
                 Console.WriteLine($"Messages Consumed Per 5 sec Second: {MessagesConsumedPerSecond.Value}");
-
                 consumerGroupTable.LeaseKeepAlive(null);
-
                 MessagesConsumedPerSecond.Set(0);
                 await Task.Delay(5000);
             }

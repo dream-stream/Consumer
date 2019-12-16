@@ -84,7 +84,7 @@ namespace Consumer.Services
                         {
                             if (response.StatusCode == HttpStatusCode.PartialContent)
                             {
-                                Console.WriteLine("Moved Offset!!!");
+                                Console.WriteLine($"Moved Offset!!! with {data.Offset}");
                                 offset += data.Offset;
                                 continue;
                             }
@@ -103,7 +103,7 @@ namespace Consumer.Services
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"Exception thrown in DoPolling");
+                    Console.WriteLine($"Exception thrown in DoPolling for partition {partition}");
                     Console.WriteLine(e);
                 }
             }
