@@ -63,18 +63,13 @@ namespace Consumer.Services
                 {
                     if (_brokerClientDict.TryGetValue($"{_topic}/{partition}", out var brokerClient))
                     {
-                        var timeoutToken = new CancellationTokenSource(5000);
-                        var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", timeoutToken.Token);
+                        var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", cancellationToken);
                         
                         if (!response.IsSuccessStatusCode)
-                        {
-                            Console.WriteLine($"Non successful response from storage: {response.StatusCode} - partition {partition}");
                             continue;
-                        }
                     
                         if (response.StatusCode == HttpStatusCode.NoContent)
                         {
-                            Console.WriteLine($"No Content received - partition: {partition}");
                             await Task.Delay(500, cancellationToken);
                             if (offset == -1)
                                 offset = 0;
@@ -95,7 +90,6 @@ namespace Consumer.Services
                                 offset = 0;
 
                             offset += data.Offset;
-                            Console.WriteLine($"partition: {partition}, offset: {offset}");
                             _messageHandler(data);
                         }
                     }
