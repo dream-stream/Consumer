@@ -91,8 +91,10 @@ namespace Consumer.Services
                             if (offset == -1)
                                 offset = 0;
 
+                            
                             if(data.Header.Partition != partition) Console.WriteLine($"The partition is not the same!!!! requested partition {partition} received partition {data.Header.Partition}");
                             offset = data.Offset;
+                            Console.WriteLine($"Partition {partition} - {offset}");
                             _messageHandler(data);
                         }
                     }
