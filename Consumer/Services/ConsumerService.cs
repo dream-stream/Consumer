@@ -84,16 +84,15 @@ namespace Consumer.Services
                             if (response.StatusCode == HttpStatusCode.PartialContent)
                             {
                                 Console.WriteLine($"Moved Offset!!! with {data.Offset} - partition {partition}");
-                                offset = data.Offset;
+                                offset += data.Offset;
                                 continue;
                             }
 
                             if (offset == -1)
                                 offset = 0;
-
                             
                             if(data.Header.Partition != partition) Console.WriteLine($"The partition is not the same!!!! requested partition {partition} received partition {data.Header.Partition}");
-                            offset = data.Offset;
+                            offset += data.Offset;
                             Console.WriteLine($"Partition {partition} - {offset}");
                             _messageHandler(data);
                         }
