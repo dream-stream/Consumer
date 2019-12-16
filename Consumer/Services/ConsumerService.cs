@@ -63,8 +63,10 @@ namespace Consumer.Services
                 {
                     if (_brokerClientDict.TryGetValue($"{_topic}/{partition}", out var brokerClient))
                     {
+                        Console.WriteLine($"Request consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}");
                         var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", cancellationToken);
-                        
+                        Console.WriteLine($"After request {partition} {response.StatusCode}");
+
                         if (!response.IsSuccessStatusCode)
                             continue;
                     

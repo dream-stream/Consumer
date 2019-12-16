@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: "consumer-{{$v}}"
-        image: dreamstream/consumer:273
+        image: dreamstream/consumer:282
         imagePullPolicy: Always
         ports:
         - containerPort: 80
