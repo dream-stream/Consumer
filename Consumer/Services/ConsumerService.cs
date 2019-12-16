@@ -63,7 +63,7 @@ namespace Consumer.Services
                 {
                     if (_brokerClientDict.TryGetValue($"{_topic}/{partition}", out var brokerClient))
                     {
-                        var timeoutToken = new CancellationTokenSource(3000);
+                        var timeoutToken = new CancellationTokenSource(5000);
                         var response = await brokerClient.GetAsync($"api/broker?consumerGroup={_consumerGroup}&topic={_topic}&partition={partition}&offset={offset}&amount={_readSize}", timeoutToken.Token);
                         
                         if (!response.IsSuccessStatusCode)
