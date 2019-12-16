@@ -28,8 +28,6 @@ spec:
           value: "Production"
         - name: CONSUMER_GROUP
           value: "MyConsumerGroup-{{$v}}"
-        - name: APPLICATION_TYPE
-          value: "Kafka"
         - name: TOPIC_NAME
           value: "Topic3"
         resources:
