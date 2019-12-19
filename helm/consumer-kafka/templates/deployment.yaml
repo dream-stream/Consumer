@@ -30,6 +30,8 @@ spec:
           value: "MyConsumerGroup-{{$v}}"
         - name: TOPIC_NAME
           value: "Topic3"
+        - name: APPLICATION_TYPE
+          value: "Kafka"
         resources:
           requests:
             memory: "500Mi"

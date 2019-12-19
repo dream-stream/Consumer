@@ -151,7 +151,7 @@ namespace Consumer
     {
         public Message Deserialize(ReadOnlySpan<byte> data, bool isNull, SerializationContext context)
         {
-            return LZ4MessagePackSerializer.Deserialize<Message>(data.ToArray());
+            return MessagePackSerializer.Deserialize<Message>(data.ToArray());
         }
     }
 }
