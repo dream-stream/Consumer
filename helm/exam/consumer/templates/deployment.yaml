@@ -1,0 +1,41 @@
+{{ range $k, $v := until (int .Values.Replicas)}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "consumer-ds-{{$v}}"
+  labels:
+    app: "consumer-ds-{{$v}}"
+    k8s-app: prometheus
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: "consumer-ds-{{$v}}"
+  template:
+    metadata:
+      labels:
+        app: "consumer-ds-{{$v}}"
+        k8s-app: prometheus
+    spec:
+      containers:
+      - name: "consumer-ds-{{$v}}"
+        image: dreamstream/consumer:293
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: CONSUMER_GROUP
+          value: "MyConsumerGroup-{{$v}}"
+        - name: TOPIC_NAME
+          value: "Topic3"
+        resources:
+          requests:
+            memory: "500Mi"
+            cpu: "1000m"
+          limits:
+            memory: "500Mi"
+            cpu: "1000m"
+---
+{{end}}

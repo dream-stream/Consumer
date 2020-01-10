@@ -1,0 +1,17 @@
+{{ range $k, $v := until (int .Values.Replicas)}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: "consumer-ds-{{$v}}"
+  labels:
+    app: "consumer-ds-{{$v}}"
+    k8s-app: prometheus
+spec:
+  ports:
+  - port: 80
+    name: web
+  selector:
+    app: "consumer-ds-{{$v}}"
+  type: ClusterIP
+---
+{{end}}

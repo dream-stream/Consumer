@@ -1,0 +1,43 @@
+{{ range $k, $v := until (int .Values.Replicas)}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "consumer-kafka-{{$v}}"
+  labels:
+    app: "consumer-kafka-{{$v}}"
+    k8s-app: prometheus
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: "consumer-kafka-{{$v}}"
+  template:
+    metadata:
+      labels:
+        app: "consumer-kafka-{{$v}}"
+        k8s-app: prometheus
+    spec:
+      containers:
+      - name: "consumer-kafka-{{$v}}"
+        image: dreamstream/consumer:293
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: CONSUMER_GROUP
+          value: "MyConsumerGroup-{{$v}}"
+        - name: TOPIC_NAME
+          value: "Topic3"
+        - name: APPLICATION_TYPE
+          value: "Kafka"
+        resources:
+          requests:
+            memory: "500Mi"
+            cpu: "1000m"
+          limits:
+            memory: "500Mi"
+            cpu: "1000m"
+---
+{{end}}
